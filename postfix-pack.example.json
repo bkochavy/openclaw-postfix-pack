@@ -1,0 +1,53 @@
+{
+  "response_prefix_template": "postfix:{provider}/{model}@{identityname}",
+  "model_aliases": {
+    "claude-opus-4-6": "o46",
+    "claude-sonnet-4-6": "s46-1m",
+    "claude-sonnet-4-5": "s45",
+    "claude-haiku-4-5": "h45",
+    "gpt-5.3-codex": "53c",
+    "gpt-5.2-codex": "52c",
+    "gpt-5.2": "52",
+    "minimax-m2.5": "m25",
+    "glm-5": "g5",
+    "kimi-k2.5": "k25",
+    "grok-4-1-fast": "g41f",
+    "grok-4-1-fast-reasoning": "g41fr"
+  },
+  "provider_aliases": {
+    "anthropic": "an",
+    "openrouter": "or",
+    "openai-codex": "oc",
+    "openai": "oa",
+    "vercel-ai-gateway": "ve",
+    "opencode": "op",
+    "xai": "xa",
+    "lmstudio": "lm"
+  },
+  "source_aliases": {
+    "openai": "oa",
+    "anthropic": "an",
+    "minimax": "mm",
+    "mistral": "ms",
+    "deepseek": "ds",
+    "google": "gg",
+    "meta-llama": "ml",
+    "moonshotai": "mo",
+    "z-ai": "za",
+    "zai": "za",
+    "xai": "xa"
+  },
+  "fallback": {
+    "provider_length": 2,
+    "source_length": 2,
+    "model_length": 12
+  },
+  "auth_mode_overrides": {
+    "anthropic": {
+      "token": "O"
+    },
+    "vercel-ai-gateway": {
+      "api_key": "T"
+    }
+  }
+}

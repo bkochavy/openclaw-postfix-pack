@@ -1,0 +1,10 @@
+[Unit]
+Description=OpenClaw Gateway postfix self-heal
+
+[Service]
+Type=oneshot
+Environment=HOME=__HOME__
+Environment=PATH=__PATH__
+Environment=OPENCLAW_HOME=__OPENCLAW_HOME__
+Environment=OPENCLAW_POSTFIX_CONFIG=__CONFIG_PATH__
+ExecStart=__OPENCLAW_HOME__/bin/selfheal.sh

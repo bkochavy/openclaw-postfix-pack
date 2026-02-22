@@ -1,0 +1,10 @@
+[Unit]
+Description=Run OpenClaw postfix self-heal every 10 minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=10min
+Unit=openclaw-gateway-selfheal.service
+
+[Install]
+WantedBy=timers.target
