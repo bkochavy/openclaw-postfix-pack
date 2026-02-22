@@ -149,11 +149,18 @@ def _strip_model_suffixes(model_name: str) -> str:
 
 
 def _preview_model_alias(model_name: str) -> str:
+    key = _strip_model_suffixes(model_name)
     model_aliases = DEFAULT_CONFIG.get("model_aliases", {})
     if isinstance(model_aliases, dict):
-        alias = model_aliases.get(model_name)
-        if isinstance(alias, str) and alias.strip():
-            return alias
+        for candidate in (
+            model_name,
+            key,
+            key.replace(".", "-"),
+            key.replace("-", "."),
+        ):
+            alias = model_aliases.get(candidate)
+            if isinstance(alias, str) and alias.strip():
+                return alias
     cleaned = "".join(ch for ch in model_name.lower() if ch.isalnum())
     return (cleaned[:12] or "model")
 
@@ -167,14 +174,26 @@ def _resolve_openclaw_json_path(openclaw_json_path: Path | None) -> Path:
     return Path.home() / ".openclaw" / "openclaw.json"
 
 
+def _load_openclaw_doc(openclaw_json_path: Path | None = None) -> dict | None:
+    try:
+        cfg_path = _resolve_openclaw_json_path(openclaw_json_path)
+        doc = json.loads(cfg_path.read_text(encoding="utf-8"))
+        if isinstance(doc, dict):
+            return doc
+    except Exception:
+        return None
+    return None
+
+
 def detect_primary_model(openclaw_json_path: Path | None = None) -> tuple[str, str] | None:
     """
     Read openclaw.json and return (provider, short_model_name) for the primary model.
     Returns None if file not found or unreadable.
     """
     try:
-        cfg_path = _resolve_openclaw_json_path(openclaw_json_path)
-        doc = json.loads(cfg_path.read_text(encoding="utf-8"))
+        doc = _load_openclaw_doc(openclaw_json_path)
+        if not isinstance(doc, dict):
+            return None
         primary = doc["agents"]["defaults"]["model"]["primary"]
         if not isinstance(primary, str):
             return None
@@ -195,6 +214,35 @@ def detect_primary_model(openclaw_json_path: Path | None = None) -> tuple[str, s
         return provider, model
     except Exception:
         return None
+
+
+def detect_identity_name(openclaw_json_path: Path | None = None) -> str | None:
+    doc = _load_openclaw_doc(openclaw_json_path)
+    if not isinstance(doc, dict):
+        return None
+
+    candidates = (
+        ("agents", "defaults", "identity", "name"),
+        ("agents", "defaults", "identityName"),
+        ("agents", "defaults", "identity"),
+        ("agents", "defaults", "name"),
+        ("identity", "name"),
+        ("identityName",),
+        ("name",),
+    )
+
+    for path in candidates:
+        cur: object = doc
+        for key in path:
+            if not isinstance(cur, dict) or key not in cur:
+                cur = None
+                break
+            cur = cur[key]
+        if isinstance(cur, str):
+            identity = cur.strip()
+            if identity:
+                return identity
+    return None
 
 
 def _default_provider_selection(detected_provider: str | None) -> list[str]:
@@ -273,47 +321,92 @@ def run_apply(config_path: Path) -> int:
 
 
 STAMP_EXPLAINER = """
-─────────────────────────────────────────────────────
-  openclaw-postfix-pack setup
-─────────────────────────────────────────────────────
-This pack stamps every OpenClaw reply with the actual
-model that sent it — not what /status says, but what
-the runtime actually used.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  openclaw-postfix-pack
+  Stamps every reply with the actual model used.
+  Appears at the end of each message.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-The stamp appears at the END of each message.
+  Your stamp will look like this:
 
-  anK/s46-1m@A
-  └┬┘└┬┘└──┬──┘└┬┘
-   │  │    │   └── @Identity: your agent's initial
-   │  │    └────── Model alias  (s46-1m = claude-sonnet-4-6)
-   │  └─────────── Auth: K=API key  O=OAuth/token  T=Vercel
-   └────────────── Provider alias  (an = anthropic)
+    {example_stamp}
 
-Model aliases (built-in, all customizable):
-  claude-sonnet-4-6 → s46-1m    claude-opus-4-6    → o46
-  claude-sonnet-4-5 → s45       claude-haiku-4-5   → h45
-  gpt-5.3-codex     → 53c       gpt-5.2-codex      → 52c
-  gpt-5.2           → 52        minimax-m2.5        → m25
-  glm-5             → g5        kimi-k2.5           → k25
-  grok-4-1-fast     → g41f
+  Reading it left to right:
 
-Provider aliases:
-  anthropic → an    openrouter → or    openai → oa
-  xai       → xa    lmstudio   → lm
+    an   — Anthropic          (provider)
+    K    — API Key            (how you're authenticated)
 
-To add or change any alias after setup:
-  Edit ~/.openclaw/postfix-pack.json → model_aliases / provider_aliases
-  Then run: ~/.openclaw/bin/postfix-apply
-─────────────────────────────────────────────────────
+    s46  — Sonnet 4.6         (model name)
+    1m   — 1M token context   (model variant)
+
+    @{identity_initial}   — {identity_name:<18} (your agent's name, first letter)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Auth letters:
+
+    K    — API Key
+    O    — OAuth / Anthropic token
+    T    — Vercel AI Gateway token
+    L    — Local model (LM Studio, Ollama)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Built-in model codes:
+
+    s46-1m  — Sonnet 4.6 (1M context)
+    o46     — Opus 4.6
+    s45     — Sonnet 4.5
+    h45     — Haiku 4.5
+    53c     — GPT-5.3 Codex
+    52c     — GPT-5.2 Codex
+    52      — GPT-5.2
+    g31p    — Gemini 3.1 Pro
+    g3f     — Gemini 3 Flash
+    q35p    — Qwen 3.5 Plus
+    g47     — GLM-4.7
+    g5      — GLM-5
+    dsr1    — DeepSeek R1
+    k25     — Kimi K2.5
+    m25     — MiniMax M2.5
+    g41f    — Grok 4.1 Fast
+    sd16    — Seed 1.6
+    l4m     — Llama 4 Maverick
+
+  You can define your own code for any model:
+
+    "gemini-2-flash"  →  "g2f"
+    "my-custom-v3"    →  "mc3"
+
+  Edit:  ~/.openclaw/postfix-pack.json  →  model_aliases
+  Apply: ~/.openclaw/bin/postfix-apply
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
 
-def interactive_flow(args: argparse.Namespace, default_providers: list[str] | None = None) -> tuple[str, str, list[tuple[str, str]]]:
+def render_stamp_explainer(detected_model: str | None, detected_identity: str | None) -> str:
+    alias = _preview_model_alias(detected_model or "claude-sonnet-4-6")
+    identity_name = (detected_identity or "A").strip() or "A"
+    identity_initial = identity_name[:1].upper() or "A"
+    return STAMP_EXPLAINER.format(
+        example_stamp=f"anK/{alias}@{identity_initial}",
+        identity_initial=identity_initial,
+        identity_name=identity_name,
+    )
+
+
+def interactive_flow(
+    args: argparse.Namespace,
+    default_providers: list[str] | None = None,
+    detected_model: str | None = None,
+    detected_identity: str | None = None,
+) -> tuple[str, str, list[tuple[str, str]]]:
     if args.quiet:
         template = ensure_postfix_template(FORMAT_OPTIONS["compact"].format(identity="{identityname}", provider="{provider}", model="{model}"))
         return template, "", [("anthropic", "api_key")]
 
-    print(STAMP_EXPLAINER)
+    print(render_stamp_explainer(detected_model, detected_identity))
 
     format_idx = prompt_choice(
         "Pick a stamp format:",
@@ -362,11 +455,18 @@ def interactive_flow(args: argparse.Namespace, default_providers: list[str] | No
 def main() -> int:
     args = parse_args()
     cfg_path = Path(args.config).expanduser()
-    detected = detect_primary_model(Path(args.openclaw_json).expanduser() if args.openclaw_json else None)
+    openclaw_path = Path(args.openclaw_json).expanduser() if args.openclaw_json else None
+    detected = detect_primary_model(openclaw_path)
+    detected_identity = detect_identity_name(openclaw_path)
     default_providers = _default_provider_selection(detected[0] if detected else None)
 
     try:
-        template, identity_name, provider_auth = interactive_flow(args, default_providers=default_providers)
+        template, identity_name, provider_auth = interactive_flow(
+            args,
+            default_providers=default_providers,
+            detected_model=(detected[1] if detected else None),
+            detected_identity=detected_identity,
+        )
     except KeyboardInterrupt:
         print("\nsetup canceled")
         return 130

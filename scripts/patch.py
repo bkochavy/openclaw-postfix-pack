@@ -28,18 +28,79 @@ TARGET_PATTERNS = ("reply-*.js", "pi-embedded-*.js", "subagent-registry-*.js")
 DEFAULT_CONFIG = {
     "response_prefix_template": "postfix:{provider}/{model}@{identityname}",
     "model_aliases": {
+        # Anthropic
         "claude-opus-4-6": "o46",
+        "claude-opus-4.6": "o46",
         "claude-sonnet-4-6": "s46-1m",
+        "claude-sonnet-4.6": "s46",
         "claude-sonnet-4-5": "s45",
         "claude-haiku-4-5": "h45",
+        "claude-haiku-4-6": "h46",
+        "claude-haiku-4.6": "h46",
+        # OpenAI
         "gpt-5.3-codex": "53c",
+        "gpt-5.3-codex-spark": "53cs",
         "gpt-5.2-codex": "52c",
         "gpt-5.2": "52",
-        "minimax-m2.5": "m25",
+        "gpt-4o": "4o",
+        "gpt-4o-mini": "4om",
+        "o3": "o3",
+        "o4-mini": "o4m",
+        # Google Gemini
+        "gemini-3.1-pro-preview": "g31p",
+        "gemini-3-flash-preview": "g3f",
+        "gemini-2.5-pro": "g25p",
+        "gemini-2.5-flash": "g25f",
+        "gemini-2-flash": "g2f",
+        "gemini-2-flash-thinking": "g2ft",
+        # Qwen (Alibaba)
+        "qwen3.5-plus-02-15": "q35p",
+        "qwen3.5-397b-a17b": "q35",
+        "qwen3-max-thinking": "q3mt",
+        "qwen3-coder-next": "q3cn",
+        "qwen3-235b-a22b": "q3",
+        "qwen2.5-coder-32b-instruct": "q25c",
+        # Z.ai / GLM
         "glm-5": "g5",
+        "glm-4.7": "g47",
+        "glm-4.7-flash": "g47f",
+        "glm-4.5": "g45",
+        # Moonshot / Kimi
         "kimi-k2.5": "k25",
+        # MiniMax
+        "minimax-m2.5": "m25",
+        "minimax-m2.1": "m21",
+        "minimax-m2-her": "m2h",
+        # Grok
+        "grok-4": "g4",
+        "grok-3": "g3",
+        "grok-3-mini": "g3m",
         "grok-4-1-fast": "g41f",
         "grok-4-1-fast-reasoning": "g41fr",
+        # DeepSeek
+        "deepseek-r1": "dsr1",
+        "deepseek-r1-0528": "dsr1",
+        "deepseek-chat": "dsc",
+        "deepseek-v3": "dsv3",
+        "deepseek-v3-0324": "dsv3",
+        # Meta Llama
+        "llama-4-maverick": "l4m",
+        "llama-4-scout": "l4s",
+        "llama-3.3-70b-instruct": "l33",
+        "llama-3.1-405b-instruct": "l31",
+        # Mistral
+        "mistral-large-2407": "ml24",
+        "mistral-small-3.1": "ms31",
+        "codestral-2501": "mcs",
+        # ByteDance Seed
+        "seed-1.6": "sd16",
+        "seed-1.6-flash": "sd16f",
+        # Arcee / Trinity
+        "trinity-large-preview": "tri",
+        # Stepfun
+        "step-3.5-flash": "sf35",
+        # OpenCode
+        "opencode": "oc",
     },
     "provider_aliases": {
         "anthropic": "an",
@@ -58,7 +119,13 @@ DEFAULT_CONFIG = {
         "mistral": "ms",
         "deepseek": "ds",
         "google": "gg",
+        "qwen": "qw",
         "meta-llama": "ml",
+        "bytedance-seed": "bs",
+        "arcee-ai": "ac",
+        "stepfun": "sf",
+        "upstage": "up",
+        "writer": "wr",
         "moonshotai": "mo",
         "z-ai": "za",
         "zai": "za",
