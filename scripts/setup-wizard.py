@@ -182,18 +182,56 @@ def run_apply(config_path: Path) -> int:
     return subprocess.run(cmd).returncode
 
 
+STAMP_EXPLAINER = """
+─────────────────────────────────────────────────────
+  openclaw-postfix-pack setup
+─────────────────────────────────────────────────────
+This pack stamps every OpenClaw reply with the actual
+model that sent it — not what /status says, but what
+the runtime actually used.
+
+The stamp appears at the END of each message.
+
+  anK/s46-1m@A
+  └┬┘└┬┘└──┬──┘└┬┘
+   │  │    │   └── @Identity: your agent's initial
+   │  │    └────── Model alias  (s46-1m = claude-sonnet-4-6)
+   │  └─────────── Auth: K=API key  O=OAuth/token  T=Vercel
+   └────────────── Provider alias  (an = anthropic)
+
+Model aliases (built-in, all customizable):
+  claude-sonnet-4-6 → s46-1m    claude-opus-4-6    → o46
+  claude-sonnet-4-5 → s45       claude-haiku-4-5   → h45
+  gpt-5.3-codex     → 53c       gpt-5.2-codex      → 52c
+  gpt-5.2           → 52        minimax-m2.5        → m25
+  glm-5             → g5        kimi-k2.5           → k25
+  grok-4-1-fast     → g41f
+
+Provider aliases:
+  anthropic → an    openrouter → or    openai → oa
+  xai       → xa    lmstudio   → lm
+
+To add or change any alias after setup:
+  Edit ~/.openclaw/postfix-pack.json → model_aliases / provider_aliases
+  Then run: ~/.openclaw/bin/postfix-apply
+─────────────────────────────────────────────────────
+"""
+
+
 def interactive_flow(args: argparse.Namespace) -> tuple[str, str, list[tuple[str, str]]]:
     if args.quiet:
         template = ensure_postfix_template(FORMAT_OPTIONS["compact"].format(identity="{identityname}", provider="{provider}", model="{model}"))
         return template, "", [("anthropic", "api_key")]
 
+    print(STAMP_EXPLAINER)
+
     format_idx = prompt_choice(
-        "What format do you want for the model stamp?",
+        "Pick a stamp format:",
         [
-            "Compact: anK/s46-1m@A (recommended)",
-            "Bracket: [anthropic|sonnet-4-6|A]",
-            "Model only: s46-1m@A",
-            "Custom: enter your own format string",
+            "Compact:    anK/s46-1m@A       ← provider+auth / model @ identity (recommended)",
+            "Bracket:    [anK|s46-1m|A]     ← same info, bracket style",
+            "Model only: s46-1m@A           ← skip provider, just model + identity",
+            "Custom:     enter your own format string",
         ],
         default_index=0,
     )
@@ -242,16 +280,43 @@ def main() -> int:
         return 130
 
     preview = preview_stamp(template, provider_auth[0][0], provider_auth[0][1], identity_name)
-    print(f"\nPreview: Your replies will look like: {preview}")
+
+    print()
+    print("─────────────────────────────────────────────────────")
+    print(f"  Preview stamp:  {preview}")
+    print()
+
+    # Decode the preview so the user knows exactly what each segment means
+    stamp_raw = preview
+    prov, rest = (stamp_raw.split("/", 1) + ["?"])[:2]
+    model_part, identity_part = (rest.split("@", 1) + ["?"])[:2] if "@" in rest else (rest, "?")
+
+    provider_key = provider_auth[0][0]
+    auth_mode    = provider_auth[0][1]
+    auth_name    = {"api_key": "API key", "oauth": "OAuth", "token": "token"}.get(auth_mode, auth_mode)
+
+    print(f"  {prov:<8}  ← {provider_key} ({auth_name})")
+    print(f"  {model_part:<8}  ← model alias (edit model_aliases in config to change)")
+    print(f"  @{identity_part:<7}  ← identity initial")
+    print()
+    print("  To add a model not in the built-in list, edit:")
+    print(f"    ~/.openclaw/postfix-pack.json → model_aliases")
+    print("  Example:  \"my-custom-model-v2\": \"mcm2\"")
+    print("  Then run: ~/.openclaw/bin/postfix-apply")
+    print("─────────────────────────────────────────────────────")
+    print()
 
     if not args.quiet:
-        confirm = input("Write this configuration and apply now? [Y/n]: ").strip().lower()
+        confirm = input("Write this config and apply? [Y/n]: ").strip().lower()
         if confirm in {"n", "no"}:
             print("setup canceled")
             return 1
 
     write_config(cfg_path, template, provider_auth)
-    print(f"Wrote config: {cfg_path}")
+    print(f"\n✅ Config written: {cfg_path}")
+    print("   Edit that file any time to add models, providers, or change the format.")
+    print("   Re-apply with: ~/.openclaw/bin/postfix-apply")
+    print()
 
     if args.no_apply:
         return 0
@@ -260,6 +325,10 @@ def main() -> int:
     if rc != 0:
         print("setup: patch apply failed", file=sys.stderr)
         return rc
+
+    print("\n✅ Patch applied. Every reply will now end with the model stamp.")
+    print("   If OpenClaw updates and the stamp breaks, run: ~/.openclaw/bin/postfix-apply")
+    print()
     return 0
 
 
