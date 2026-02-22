@@ -142,6 +142,27 @@ DEFAULT_CONFIG = {
     },
 }
 
+ALIAS_PREFIX_MAP = {
+    "sonnet": "s",
+    "opus": "o",
+    "haiku": "h",
+    "gemini": "g",
+    "qwen": "q",
+    "glm": "g",
+    "deepseek": "ds",
+    "llama": "l",
+    "mistral": "ms",
+    "kimi": "k",
+    "minimax": "m",
+    "grok": "g",
+    "seed": "sd",
+    "step": "sf",
+    "trinity": "tr",
+    "opencode": "oc",
+}
+
+PROVIDER_MODEL_LAST_SEGMENT = {"openrouter", "vercel-ai-gateway"}
+
 
 def deep_merge(base: dict, incoming: dict) -> dict:
     out = dict(base)
@@ -236,6 +257,306 @@ def sync_response_prefix(cfg: dict, openclaw_json_path: Path, check_only: bool) 
     print(f"response-prefix: backup={backup}")
     print(f"response-prefix: changed_keys={changed}")
     return True
+
+
+def _strip_model_suffixes(model_name: str) -> str:
+    model = model_name.strip()
+    if not model:
+        return model
+    model = model.split(":", 1)[0]
+    while True:
+        next_model = re.sub(r"-(?:\d{8}|latest)$", "", model, flags=re.IGNORECASE)
+        if next_model == model:
+            break
+        model = next_model
+    if model.startswith("claude-"):
+        model = re.sub(r"-(\d+)\.(\d+)$", r"-\1-\2", model)
+    return model
+
+
+def _extract_short_model_name(model_ref: str) -> str | None:
+    raw = model_ref.strip()
+    if not raw:
+        return None
+
+    parts = [segment for segment in raw.split("/") if segment]
+    if len(parts) >= 2:
+        provider = parts[0]
+        if provider in PROVIDER_MODEL_LAST_SEGMENT:
+            model = parts[-1]
+        else:
+            model = "/".join(parts[1:])
+    else:
+        model = raw
+
+    short = _strip_model_suffixes(model).strip().lower()
+    return short or None
+
+
+def _model_alias_candidates(model_name: str) -> list[str]:
+    base = _strip_model_suffixes(model_name).strip().lower()
+    out: list[str] = []
+    for candidate in (base, base.replace(".", "-"), base.replace("-", ".")):
+        if candidate and candidate not in out:
+            out.append(candidate)
+    return out
+
+
+def _lookup_alias(model_name: str, alias_map: dict) -> str | None:
+    for candidate in _model_alias_candidates(model_name):
+        alias = alias_map.get(candidate)
+        if isinstance(alias, str):
+            cleaned = alias.strip()
+            if cleaned:
+                return cleaned
+    return None
+
+
+def _load_json_object(path: Path) -> tuple[dict | None, str | None]:
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return None, str(exc)
+    if not isinstance(doc, dict):
+        return None, "expected object json"
+    return doc, None
+
+
+def _extract_version_from_segments(segments: list[str]) -> str:
+    parts: list[str] = []
+    started = False
+
+    for seg in segments:
+        token = seg.lower()
+        if not started:
+            m_r = re.fullmatch(r"r(\d+(?:\.\d+)*)", token)
+            if m_r:
+                digits = re.sub(r"[^0-9]", "", m_r.group(1))
+                return f"r{digits}" if digits else ""
+
+            m_v = re.fullmatch(r"v(\d+(?:\.\d+)*)", token)
+            if m_v:
+                parts.append(re.sub(r"[^0-9]", "", m_v.group(1)))
+                started = True
+                continue
+
+            if re.fullmatch(r"\d+", token):
+                parts.append(token)
+                started = True
+                continue
+
+            m_num_prefix = re.fullmatch(r"(\d+)[a-z]+", token)
+            if m_num_prefix:
+                parts.append(m_num_prefix.group(1))
+                started = True
+                continue
+
+            m_num_suffix = re.fullmatch(r"[a-z]+(\d+)", token)
+            if m_num_suffix:
+                parts.append(m_num_suffix.group(1))
+                started = True
+                continue
+        else:
+            if re.fullmatch(r"\d+", token):
+                # Ignore likely MMDD/date build suffix once version already exists.
+                if len(token) >= 4 and token.startswith("0"):
+                    break
+                parts.append(token)
+                continue
+            break
+
+    return "".join(parts)
+
+
+def _segment_variant_hint(segment: str) -> str:
+    token = segment.lower()
+    if "turbo" in token:
+        return "tb"
+    if "flash" in token:
+        return "f"
+    if token in {"pro", "plus"}:
+        return "p"
+    if token in {"mini", "max", "maverick"}:
+        return "m"
+    if "think" in token or "reason" in token:
+        return "t"
+    if "coder" in token or "codex" in token:
+        return "c"
+    if "instruct" in token:
+        return "i"
+    if "vision" in token:
+        return "v"
+    if token in {"large"}:
+        return "l"
+    if token in {"small", "scout"}:
+        return "s"
+    return ""
+
+
+def derive_alias(model_name: str) -> str:
+    """
+    Derive a deterministic short alias for a model string.
+    """
+    name = _strip_model_suffixes(model_name).strip().lower()
+    if not name:
+        return "md"
+
+    name = name.split(":", 1)[0]
+    while True:
+        next_name = re.sub(r"-(?:\d{8}|latest|preview)$", "", name, flags=re.IGNORECASE)
+        if next_name == name:
+            break
+        name = next_name
+
+    segments = [seg for seg in re.split(r"[-.]+", name) if seg]
+    if not segments:
+        return "md"
+
+    first = segments[0]
+    m_family = re.match(r"^([a-z]+)(\d+)?$", first)
+    if m_family:
+        family = m_family.group(1)
+        family_version = (m_family.group(2) or "").replace(".", "")
+    else:
+        family = re.sub(r"[^a-z]+", "", first)
+        family_version = ""
+
+    start_idx = 1
+    if family == "claude":
+        role = segments[1].lower() if len(segments) > 1 else ""
+        prefix = ALIAS_PREFIX_MAP.get(role, (family[:2] or "cl"))
+        if role in {"sonnet", "opus", "haiku"}:
+            start_idx = 2
+    elif family == "gpt":
+        prefix = ""
+    elif family in ALIAS_PREFIX_MAP:
+        prefix = ALIAS_PREFIX_MAP[family]
+    else:
+        second = re.sub(r"[^a-z]+", "", segments[1].lower()) if len(segments) > 1 else ""
+        if family and len(family) <= 2 and second:
+            prefix = f"{family[:1]}{second[:1]}"
+        else:
+            seed_prefix = family or re.sub(r"[^a-z]+", "", first)
+            prefix = (seed_prefix[:2] or "md")
+
+    remaining = segments[start_idx:]
+    version = family_version + _extract_version_from_segments(remaining)
+
+    hints: list[str] = []
+    for seg in remaining:
+        hint = _segment_variant_hint(seg)
+        if hint and hint not in hints:
+            hints.append(hint)
+    variant = "".join(hints)
+
+    alias = f"{prefix}{version}{variant}".lower()
+    if len(alias) > 5:
+        prefix_part = prefix[:2]
+        variant_part = variant[:2]
+        room_for_version = max(0, 5 - len(prefix_part) - len(variant_part))
+        if room_for_version == 0 and len(variant_part) > 1:
+            variant_part = variant_part[:1]
+            room_for_version = max(0, 5 - len(prefix_part) - len(variant_part))
+        alias = f"{prefix_part}{version[:room_for_version]}{variant_part}"
+        alias = alias[:5]
+
+    cleaned = "".join(ch for ch in name if ch.isalnum())
+    if len(alias) < 2:
+        if cleaned:
+            alias = (alias + cleaned)[:2]
+        else:
+            alias = (alias + "md")[:2]
+
+    return alias or "md"
+
+
+def sync_models(cfg_path: Path, openclaw_json_path: Path) -> None:
+    try:
+        cfg_path = cfg_path.expanduser()
+        openclaw_json_path = openclaw_json_path.expanduser()
+
+        if not openclaw_json_path.is_file():
+            print(f"sync-models: openclaw config not found: {openclaw_json_path}")
+            print("sync-models: 0 new aliases (all models already covered)")
+            return
+
+        openclaw_doc, openclaw_err = _load_json_object(openclaw_json_path)
+        if openclaw_doc is None:
+            print(f"sync-models: could not read {openclaw_json_path}: {openclaw_err}")
+            print("sync-models: 0 new aliases (all models already covered)")
+            return
+
+        model_cfg = openclaw_doc.get("agents", {}).get("defaults", {}).get("model", {})
+        raw_models: list[str] = []
+        if isinstance(model_cfg, dict):
+            primary = model_cfg.get("primary")
+            if isinstance(primary, str):
+                raw_models.append(primary)
+            fallbacks = model_cfg.get("fallbacks", [])
+            if isinstance(fallbacks, list):
+                raw_models.extend(item for item in fallbacks if isinstance(item, str))
+
+        short_models: list[str] = []
+        seen_models: set[str] = set()
+        for raw in raw_models:
+            short = _extract_short_model_name(raw)
+            if short and short not in seen_models:
+                seen_models.add(short)
+                short_models.append(short)
+
+        user_cfg: dict = {}
+        if cfg_path.is_file():
+            user_cfg_doc, user_cfg_err = _load_json_object(cfg_path)
+            if user_cfg_doc is None:
+                print(f"sync-models: could not read {cfg_path}: {user_cfg_err}")
+                print("sync-models: 0 new aliases (all models already covered)")
+                return
+            user_cfg = user_cfg_doc
+
+        custom_aliases = user_cfg.get("model_aliases")
+        if not isinstance(custom_aliases, dict):
+            custom_aliases = {}
+
+        builtin_aliases = DEFAULT_CONFIG.get("model_aliases", {})
+        if not isinstance(builtin_aliases, dict):
+            builtin_aliases = {}
+
+        used_alias_values: set[str] = set()
+        for alias_map in (builtin_aliases, custom_aliases):
+            for value in alias_map.values():
+                if isinstance(value, str):
+                    cleaned = value.strip()
+                    if cleaned:
+                        used_alias_values.add(cleaned)
+
+        derived: list[tuple[str, str]] = []
+        for model in short_models:
+            if _lookup_alias(model, builtin_aliases) or _lookup_alias(model, custom_aliases):
+                continue
+
+            base_alias = derive_alias(model)
+            alias = base_alias
+            suffix = 2
+            while alias in used_alias_values:
+                alias = f"{base_alias}{suffix}"
+                suffix += 1
+
+            custom_aliases[model] = alias
+            used_alias_values.add(alias)
+            derived.append((model, alias))
+
+        if derived:
+            cfg_path.parent.mkdir(parents=True, exist_ok=True)
+            user_cfg["model_aliases"] = custom_aliases
+            cfg_path.write_text(json.dumps(user_cfg, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            print(f"sync-models: {len(derived)} new aliases derived")
+            for model, alias in derived:
+                print(f"  {model} -> {alias}  (derived)")
+        else:
+            print("sync-models: 0 new aliases (all models already covered)")
+    except Exception as exc:
+        print(f"sync-models: warning: {exc}")
+        print("sync-models: 0 new aliases (all models already covered)")
 
 
 def dist_has_target_bundles(dist: Path) -> bool:
@@ -628,6 +949,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true", help="Show what would change without writing")
     parser.add_argument("--force-modelstamp", action="store_true", help="Force repatching model stamp logic")
     parser.add_argument("--setup", action="store_true", help="Run setup wizard, then patch")
+    parser.add_argument("--sync-models", action="store_true", help="Auto-derive aliases for models from openclaw.json")
     return parser.parse_args()
 
 
@@ -637,6 +959,10 @@ def main() -> int:
     no_write = args.check_only or args.dry_run
 
     cfg_path = Path(args.config).expanduser()
+    openclaw_json_path = Path(args.openclaw_json).expanduser()
+    if args.sync_models:
+        sync_models(cfg_path, openclaw_json_path)
+
     if args.setup:
         wizard_path = Path(__file__).with_name("setup-wizard.py")
         if not wizard_path.is_file():
@@ -650,7 +976,7 @@ def main() -> int:
             return setup_proc.returncode
 
     cfg = load_config(cfg_path)
-    response_prefix_ok = sync_response_prefix(cfg, Path(args.openclaw_json).expanduser(), no_write)
+    response_prefix_ok = sync_response_prefix(cfg, openclaw_json_path, no_write)
 
     pkg_dir = Path(args.openclaw_pkg_dir).expanduser() if args.openclaw_pkg_dir else resolve_openclaw_pkg_dir()
     dist = pkg_dir / "dist"

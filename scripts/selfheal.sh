@@ -16,7 +16,7 @@ log() {
 log "selfheal: start"
 
 if [[ -x "$PATCHER" ]]; then
-  if "$PATCHER" --config "$PACK_CONFIG" >>"$LOGFILE" 2>&1; then
+  if "$PATCHER" --config "$PACK_CONFIG" --sync-models >>"$LOGFILE" 2>&1; then
     log "selfheal: patch check ok"
   else
     log "selfheal: patch check failed (non-fatal)"

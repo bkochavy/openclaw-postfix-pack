@@ -294,6 +294,11 @@ fi
 
 install_payload
 
+# Run initial model sync from openclaw.json if it exists
+if [[ -f "$OPENCLAW_JSON" ]]; then
+  "${BIN_DIR}/postfix-apply" --config "$CONFIG_PATH" --sync-models --openclaw-json "$OPENCLAW_JSON" 2>/dev/null || true
+fi
+
 if [[ "$FORCE_SETUP" -eq 1 || ! -f "$CONFIG_PATH" ]]; then
   run_setup_wizard
 else

@@ -5,7 +5,19 @@ description: "Manage OpenClaw postfix stamp model aliases. Use when: user adds a
 
 # postfix-aliases
 
+Note: Since v1.1.0, wrapper.sh automatically runs --sync-models on every gateway restart. You only need this skill if you want to customize the auto-derived alias or override an existing one.
+
 Use this skill when model stamps show long/unrecognized model IDs and the user wants short postfix codes.
+
+## Mechanism 1: automatic on gateway restart
+
+`wrapper.sh` now invokes `patch.py` with `--sync-models`, so aliases are auto-synced from `~/.openclaw/openclaw.json` whenever the gateway restarts.
+
+This skill is primarily for:
+
+- Manual alias override (user wants different code than auto-derived)
+- Debugging why a model shows an unexpected alias
+- Explaining the naming convention
 
 ## What this skill does
 

@@ -18,7 +18,7 @@ fi
 {
   echo "[$(date -u +"%Y-%m-%dT%H:%M:%SZ")] ensure postfix patch"
   if [[ -x "$PATCHER" ]]; then
-    "$PATCHER" --config "$PACK_CONFIG" || true
+    "$PATCHER" --config "$PACK_CONFIG" --sync-models || true
   else
     echo "patcher missing: $PATCHER"
   fi
