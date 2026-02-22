@@ -89,9 +89,9 @@ fetch_pack_if_needed() {
     return
   fi
 
-  local repo_slug="${OPENCLAW_POSTFIX_REPO:-USERNAME/openclaw-postfix-pack}"
+  local repo_slug="${OPENCLAW_POSTFIX_REPO:-bkochavy/openclaw-postfix-pack}"
   local repo_ref="${OPENCLAW_POSTFIX_REF:-main}"
-  if [[ "${repo_slug}" == "USERNAME/openclaw-postfix-pack" ]]; then
+  if [[ "${repo_slug}" == "bkochavy/openclaw-postfix-pack" ]]; then
     die "Set OPENCLAW_POSTFIX_REPO=<owner>/openclaw-postfix-pack when running via curl|bash"
   fi
 
