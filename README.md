@@ -1,5 +1,13 @@
 # openclaw-postfix-pack
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![OpenClaw](https://img.shields.io/badge/OpenClaw-compatible-orange)](https://openclaw.ai)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](tests/)
+
+> **Stamps every OpenClaw message with the actual model that sent it.**
+> 
+> `/status` lies. This doesn't.
+
 > **Every OpenClaw reply ends with a stamp showing exactly which model sent it.**
 
 ```
@@ -39,11 +47,12 @@ OpenClaw updates via a self-heal that runs every 10 minutes.
 ### Install (one command)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/OWNER/openclaw-postfix-pack/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/bkochavy/openclaw-postfix-pack/main/install.sh | bash
 ```
 
-Set `OPENCLAW_POSTFIX_REPO=yourusername/openclaw-postfix-pack` before running
-`curl|bash`, or clone the repo and run `bash install.sh` directly.
+If you run via `curl|bash`, `OPENCLAW_POSTFIX_REPO` is auto-set from the URL,
+so no env var is needed. You can also clone the repo and run `bash install.sh`
+directly.
 
 The installer will walk you through a short setup wizard:
 - Pick your stamp format (compact, bracket, or custom)

@@ -1,5 +1,5 @@
 ---
-name: postfix-aliases
+name: openclaw-postfix-pack
 description: "Full operational runbook for openclaw-postfix-pack. Use when: user wants to manage, customize, or troubleshoot the model stamp that appears at the end of every OpenClaw message. Covers: changing stamp format, renaming model codes, adding new models, fixing a broken stamp after update, understanding what the stamp means, re-applying after OpenClaw update, and complete alias management."
 ---
 

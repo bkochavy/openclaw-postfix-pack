@@ -91,9 +91,6 @@ fetch_pack_if_needed() {
 
   local repo_slug="${OPENCLAW_POSTFIX_REPO:-bkochavy/openclaw-postfix-pack}"
   local repo_ref="${OPENCLAW_POSTFIX_REF:-main}"
-  if [[ "${repo_slug}" == "bkochavy/openclaw-postfix-pack" ]]; then
-    die "Set OPENCLAW_POSTFIX_REPO=<owner>/openclaw-postfix-pack when running via curl|bash"
-  fi
 
   TMP_PACK_DIR="$(mktemp -d)"
   local archive_url="https://codeload.github.com/${repo_slug}/tar.gz/${repo_ref}"
