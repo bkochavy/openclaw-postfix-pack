@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import re
 import socket
 import subprocess
 import sys
@@ -47,6 +49,7 @@ def parse_args() -> argparse.Namespace:
     default_cfg = Path.home() / ".openclaw" / "postfix-pack.json"
     parser = argparse.ArgumentParser(description="Guided setup for postfix-pack config")
     parser.add_argument("--config", default=str(default_cfg))
+    parser.add_argument("--openclaw-json", help="Path to openclaw.json (default: auto-detect)")
     parser.add_argument("--quiet", action="store_true", help="Use defaults without prompts")
     parser.add_argument("--no-apply", action="store_true", help="Write config but do not apply patch")
     return parser.parse_args()
@@ -130,18 +133,105 @@ def build_template(format_key: str, identity_name: str, custom_value: str) -> st
     return ensure_postfix_template(base)
 
 
-def preview_stamp(template: str, provider: str, auth_mode: str, identity_name: str) -> str:
+def _strip_model_suffixes(model_name: str) -> str:
+    model = model_name.strip()
+    if not model:
+        return model
+    model = model.split(":", 1)[0]
+    while True:
+        next_model = re.sub(r"-(?:\d{8}|latest)$", "", model, flags=re.IGNORECASE)
+        if next_model == model:
+            break
+        model = next_model
+    if model.startswith("claude-"):
+        model = re.sub(r"-(\d+)\.(\d+)$", r"-\1-\2", model)
+    return model
+
+
+def _preview_model_alias(model_name: str) -> str:
+    model_aliases = DEFAULT_CONFIG.get("model_aliases", {})
+    if isinstance(model_aliases, dict):
+        alias = model_aliases.get(model_name)
+        if isinstance(alias, str) and alias.strip():
+            return alias
+    cleaned = "".join(ch for ch in model_name.lower() if ch.isalnum())
+    return (cleaned[:12] or "model")
+
+
+def _resolve_openclaw_json_path(openclaw_json_path: Path | None) -> Path:
+    if openclaw_json_path is not None:
+        return openclaw_json_path.expanduser()
+    openclaw_home = os.getenv("OPENCLAW_HOME")
+    if openclaw_home:
+        return Path(openclaw_home).expanduser() / "openclaw.json"
+    return Path.home() / ".openclaw" / "openclaw.json"
+
+
+def detect_primary_model(openclaw_json_path: Path | None = None) -> tuple[str, str] | None:
+    """
+    Read openclaw.json and return (provider, short_model_name) for the primary model.
+    Returns None if file not found or unreadable.
+    """
+    try:
+        cfg_path = _resolve_openclaw_json_path(openclaw_json_path)
+        doc = json.loads(cfg_path.read_text(encoding="utf-8"))
+        primary = doc["agents"]["defaults"]["model"]["primary"]
+        if not isinstance(primary, str):
+            return None
+
+        parts = [segment for segment in primary.split("/") if segment]
+        if len(parts) < 2:
+            return None
+
+        provider = parts[0]
+        if provider in {"openrouter", "vercel-ai-gateway"}:
+            model = parts[-1]
+        else:
+            model = "/".join(parts[1:])
+
+        model = _strip_model_suffixes(model)
+        if not provider or not model:
+            return None
+        return provider, model
+    except Exception:
+        return None
+
+
+def _default_provider_selection(detected_provider: str | None) -> list[str]:
+    if not detected_provider:
+        return ["anthropic"]
+
+    provider_map = {
+        "openai-codex": "openai",
+        "vercel-ai-gateway": "openai",
+    }
+    mapped = provider_map.get(detected_provider, detected_provider)
+    valid_options = {key for key, _ in PROVIDER_OPTIONS}
+    if mapped in valid_options:
+        return [mapped]
+    return ["anthropic"]
+
+
+def preview_stamp(
+    template: str,
+    provider: str,
+    auth_mode: str,
+    identity_name: str,
+    model_override: str | None = None,
+) -> str:
     stamp = template
     if stamp.startswith("postfix:"):
         stamp = stamp[8:]
 
     provider_alias = f"{to_provider_alias(provider)}{auth_letter_for(provider, auth_mode)}"
     identity = identity_name.strip() or socket.gethostname().split(".")[0][:1].upper() or "A"
+    model_name = model_override or "claude-sonnet-4-6"
+    model_alias = _preview_model_alias(model_name)
 
     values = {
         "{provider}": provider_alias,
-        "{model}": "s46-1m",
-        "{modelfull}": "anthropic/claude-sonnet-4-6",
+        "{model}": model_alias,
+        "{modelfull}": f"{provider}/{model_name}",
         "{identityname}": identity,
     }
     for token, value in values.items():
@@ -218,7 +308,7 @@ To add or change any alias after setup:
 """
 
 
-def interactive_flow(args: argparse.Namespace) -> tuple[str, str, list[tuple[str, str]]]:
+def interactive_flow(args: argparse.Namespace, default_providers: list[str] | None = None) -> tuple[str, str, list[tuple[str, str]]]:
     if args.quiet:
         template = ensure_postfix_template(FORMAT_OPTIONS["compact"].format(identity="{identityname}", provider="{provider}", model="{model}"))
         return template, "", [("anthropic", "api_key")]
@@ -249,7 +339,7 @@ def interactive_flow(args: argparse.Namespace) -> tuple[str, str, list[tuple[str
     selected_provider_keys = prompt_multi_select(
         "Which providers do you use?",
         PROVIDER_OPTIONS,
-        default=["anthropic"],
+        default=default_providers or ["anthropic"],
     )
 
     provider_auth: list[tuple[str, str]] = []
@@ -272,18 +362,30 @@ def interactive_flow(args: argparse.Namespace) -> tuple[str, str, list[tuple[str
 def main() -> int:
     args = parse_args()
     cfg_path = Path(args.config).expanduser()
+    detected = detect_primary_model(Path(args.openclaw_json).expanduser() if args.openclaw_json else None)
+    default_providers = _default_provider_selection(detected[0] if detected else None)
 
     try:
-        template, identity_name, provider_auth = interactive_flow(args)
+        template, identity_name, provider_auth = interactive_flow(args, default_providers=default_providers)
     except KeyboardInterrupt:
         print("\nsetup canceled")
         return 130
 
-    preview = preview_stamp(template, provider_auth[0][0], provider_auth[0][1], identity_name)
+    preview = preview_stamp(
+        template,
+        provider_auth[0][0],
+        provider_auth[0][1],
+        identity_name,
+        model_override=(detected[1] if detected else None),
+    )
 
     print()
     print("─────────────────────────────────────────────────────")
     print(f"  Preview stamp:  {preview}")
+    if detected:
+        print(f"  (detected your primary model: {detected[0]}/{detected[1]})")
+    else:
+        print("  (example only — could not read openclaw.json)")
     print()
 
     # Decode the preview so the user knows exactly what each segment means
