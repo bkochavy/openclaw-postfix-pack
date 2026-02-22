@@ -137,7 +137,7 @@ def apply_template_to_openclaw_json(doc: dict, template: str) -> int:
 
 
 def backup_openclaw_json(path: Path) -> Path:
-    ts = dt.datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+    ts = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d-%H%M%S")
     openclaw_home = Path(os.getenv("OPENCLAW_HOME", str(Path.home() / ".openclaw"))).expanduser()
     backup_dir = openclaw_home / "backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
@@ -171,16 +171,113 @@ def sync_response_prefix(cfg: dict, openclaw_json_path: Path, check_only: bool) 
     return True
 
 
+def dist_has_target_bundles(dist: Path) -> bool:
+    if not dist.is_dir():
+        return False
+    for pattern in TARGET_PATTERNS:
+        if any(dist.glob(pattern)):
+            return True
+    return False
+
+
+def try_pkg_dir(candidate: Path, *, reason: str, tried: list[str], seen: set[str]) -> Path | None:
+    key = str(candidate)
+    if key in seen:
+        return None
+    seen.add(key)
+
+    dist = candidate / "dist"
+    if dist_has_target_bundles(dist):
+        tried.append(f"{candidate} ({reason}; dist has target bundles)")
+        return candidate
+
+    if dist.is_dir():
+        tried.append(f"{candidate} ({reason}; dist exists but no target bundles)")
+    else:
+        tried.append(f"{candidate} ({reason}; missing dist)")
+    return None
+
+
+def resolve_from_node_root(cmd: list[str], *, label: str, tried: list[str], seen: set[str]) -> Path | None:
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+    except FileNotFoundError:
+        tried.append(f"{label}: command not found ({' '.join(cmd)})")
+        return None
+
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "").strip() or "no output"
+        tried.append(f"{label}: failed ({' '.join(cmd)}), rc={proc.returncode}, detail={detail}")
+        return None
+
+    root = proc.stdout.strip()
+    if not root:
+        tried.append(f"{label}: empty output from {' '.join(cmd)}")
+        return None
+
+    return try_pkg_dir(Path(root).expanduser() / "openclaw", reason=f"{label} root", tried=tried, seen=seen)
+
+
 def resolve_openclaw_pkg_dir() -> Path:
-    which = shutil.which("openclaw")
-    if not which:
-        for cand in ("/opt/homebrew/bin/openclaw", "/usr/local/bin/openclaw", "/usr/bin/openclaw"):
-            if Path(cand).exists():
-                which = cand
-                break
-    if not which:
-        raise SystemExit("openclaw executable not found")
-    return Path(which).resolve().parent
+    tried: list[str] = []
+    seen: set[str] = set()
+
+    exec_candidates: list[Path] = []
+    which_path = shutil.which("openclaw")
+    if which_path:
+        exec_candidates.append(Path(which_path))
+    for cand in ("/opt/homebrew/bin/openclaw", "/usr/local/bin/openclaw", "/usr/bin/openclaw"):
+        path = Path(cand)
+        if path.exists():
+            exec_candidates.append(path)
+        else:
+            tried.append(f"{path} (fallback executable missing)")
+
+    unique_execs: list[Path] = []
+    seen_execs: set[str] = set()
+    for exe in exec_candidates:
+        key = str(exe)
+        if key in seen_execs:
+            continue
+        seen_execs.add(key)
+        unique_execs.append(exe)
+
+    for exe in unique_execs:
+        try:
+            resolved_exe = exe.resolve()
+        except OSError as exc:
+            tried.append(f"{exe} (resolve failed: {exc})")
+            continue
+
+        pkg_candidate = resolved_exe.parent
+        found = try_pkg_dir(
+            pkg_candidate,
+            reason=f"from openclaw executable {exe} -> {resolved_exe}",
+            tried=tried,
+            seen=seen,
+        )
+        if found:
+            return found
+
+        if not (pkg_candidate / "dist").is_dir():
+            for parent in pkg_candidate.parents:
+                found = try_pkg_dir(
+                    parent,
+                    reason=f"parent walk from {pkg_candidate}",
+                    tried=tried,
+                    seen=seen,
+                )
+                if found:
+                    return found
+
+    for cmd, label in ((["npm", "root", "-g"], "npm"), (["pnpm", "root", "-g"], "pnpm")):
+        found = resolve_from_node_root(cmd, label=label, tried=tried, seen=seen)
+        if found:
+            return found
+
+    lines = ["openclaw package dir not found. Tried paths:"]
+    lines.extend(f"  - {entry}" for entry in tried)
+    raise SystemExit("\n".join(lines))
 
 
 def resolve_node_bin() -> str | None:
@@ -374,6 +471,82 @@ def bump(summary: dict, key: str, status: str) -> None:
         summary[f"{key}_no_match"] += 1
 
 
+def parse_bundle_family(name: str) -> str:
+    stem = name[:-3] if name.endswith(".js") else name
+    if "-" not in stem:
+        return f"{stem}.js"
+    return f"{stem.rsplit('-', 1)[0]}-*.js"
+
+
+def format_dist_families(dist: Path) -> list[str]:
+    grouped: dict[str, list[str]] = {}
+    for file in sorted(dist.glob("*.js")):
+        family = parse_bundle_family(file.name)
+        grouped.setdefault(family, []).append(file.name)
+
+    if not grouped:
+        return ["- (no .js bundles found in dist/)"]
+
+    lines: list[str] = []
+    for family in sorted(grouped):
+        files = ", ".join(grouped[family])
+        lines.append(f"- {family}: {files}")
+    return lines
+
+
+def read_openclaw_version(pkg_dir: Path) -> str:
+    package_json = pkg_dir / "package.json"
+    if not package_json.is_file():
+        return "unknown"
+    try:
+        doc = json.loads(package_json.read_text(encoding="utf-8"))
+    except Exception:
+        return "unknown"
+    version = doc.get("version")
+    return version if isinstance(version, str) and version.strip() else "unknown"
+
+
+def print_escape_hatch_prompt(pkg_dir: Path, dist: Path) -> None:
+    version = read_openclaw_version(pkg_dir)
+    families = format_dist_families(dist)
+
+    print(
+        "postfix-patch: WARNING: No target bundles found. The bundle layout may have changed in this OpenClaw version.",
+        file=sys.stderr,
+    )
+    print("", file=sys.stderr)
+    print(
+        "To implement a fresh native patch compatible with your version, give this prompt to Claude Code or Codex:",
+        file=sys.stderr,
+    )
+    print("", file=sys.stderr)
+    print("---", file=sys.stderr)
+    print(f"I'm running OpenClaw {version} installed at {pkg_dir}.", file=sys.stderr)
+    print("The dist/ directory contains these bundle families:", file=sys.stderr)
+    for line in families:
+        print(line, file=sys.stderr)
+    print("", file=sys.stderr)
+    print("I need a postfix patch that:", file=sys.stderr)
+    print("1. Intercepts outbound Telegram message assembly and appends a model stamp to the end", file=sys.stderr)
+    print("2. The stamp format is: {provider_alias}{auth_letter}/{model_alias}@{identity_initial}", file=sys.stderr)
+    print("3. Must survive OpenClaw updates (marker-based, idempotent, syntax-validated)", file=sys.stderr)
+    print("4. Auth letters: K=api_key, O=oauth/token, T=vercel-gateway, L=local", file=sys.stderr)
+    print("5. Provider/model aliases from: ~/.openclaw/postfix-pack.json", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("Look at the dist/ bundles and find where effectivePrefix is applied to outbound text.", file=sys.stderr)
+    print("Patch that location to support postfix: mode (append instead of prepend).", file=sys.stderr)
+    print("Also patch createReplyPrefixContext to inject alias-resolved model/provider/auth stamps.", file=sys.stderr)
+    print("---", file=sys.stderr)
+
+
+def format_dry_status(status: str) -> str:
+    if status == "patched":
+        return "would_patch"
+    if status == "no-match":
+        return "no_match"
+    return status
+
+
 def parse_args() -> argparse.Namespace:
     default_openclaw_home = Path(os.getenv("OPENCLAW_HOME", str(Path.home() / ".openclaw"))).expanduser()
     parser = argparse.ArgumentParser(description="Patch OpenClaw dist bundles for postfix suffix stamps")
@@ -385,6 +558,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--openclaw-pkg-dir", default="", help="OpenClaw package dir that contains dist/")
     parser.add_argument("--check-only", action="store_true", help="Do not write files")
+    parser.add_argument("--dry-run", action="store_true", help="Show what would change without writing")
     parser.add_argument("--force-modelstamp", action="store_true", help="Force repatching model stamp logic")
     parser.add_argument("--setup", action="store_true", help="Run setup wizard, then patch")
     return parser.parse_args()
@@ -393,6 +567,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     force_modelstamp = args.force_modelstamp or os.getenv("OPENCLAW_PATCH_FORCE_MODELSTAMP", "").lower() in {"1", "true", "yes"}
+    no_write = args.check_only or args.dry_run
 
     cfg_path = Path(args.config).expanduser()
     if args.setup:
@@ -408,7 +583,7 @@ def main() -> int:
             return setup_proc.returncode
 
     cfg = load_config(cfg_path)
-    response_prefix_ok = sync_response_prefix(cfg, Path(args.openclaw_json).expanduser(), args.check_only)
+    response_prefix_ok = sync_response_prefix(cfg, Path(args.openclaw_json).expanduser(), no_write)
 
     pkg_dir = Path(args.openclaw_pkg_dir).expanduser() if args.openclaw_pkg_dir else resolve_openclaw_pkg_dir()
     dist = pkg_dir / "dist"
@@ -433,6 +608,7 @@ def main() -> int:
         "modelstamp_no_match": 0,
         "syntax_fail": 0,
     }
+    dry_run_lines: list[str] = []
 
     for path in bundle_files:
         js = path.read_text(encoding="utf-8")
@@ -444,7 +620,13 @@ def main() -> int:
         bump(summary, "idshort", st2)
         bump(summary, "modelstamp", st3)
 
-        if args.check_only:
+        if args.dry_run:
+            dry_st1 = format_dry_status(st1)
+            dry_st2 = format_dry_status(st2)
+            dry_st3 = format_dry_status(st3)
+            dry_run_lines.append(f"{path.name}: postfix={dry_st1}, idshort={dry_st2}, modelstamp={dry_st3}")
+
+        if no_write:
             continue
 
         if js4 != js:
@@ -458,6 +640,11 @@ def main() -> int:
                 if detail:
                     print(detail)
 
+    if args.dry_run:
+        print("DRY RUN — no files written")
+        for line in dry_run_lines:
+            print(f"  {line}")
+
     print(
         "postfix-patch:",
         ", ".join(f"{k}={v}" for k, v in summary.items()),
@@ -465,6 +652,7 @@ def main() -> int:
     )
 
     if summary["postfix_patched"] == 0 and summary["postfix_already"] == 0:
+        print_escape_hatch_prompt(pkg_dir, dist)
         return 3
     if summary["syntax_fail"] > 0:
         return 4

@@ -39,8 +39,11 @@ OpenClaw updates via a self-heal that runs every 10 minutes.
 ### Install (one command)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/USERNAME/openclaw-postfix-pack/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/OWNER/openclaw-postfix-pack/main/install.sh | bash
 ```
+
+Set `OPENCLAW_POSTFIX_REPO=yourusername/openclaw-postfix-pack` before running
+`curl|bash`, or clone the repo and run `bash install.sh` directly.
 
 The installer will walk you through a short setup wizard:
 - Pick your stamp format (compact, bracket, or custom)
