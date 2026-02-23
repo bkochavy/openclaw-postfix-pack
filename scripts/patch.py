@@ -208,18 +208,21 @@ def ensure_postfix_template(template: str) -> str:
 def apply_template_to_openclaw_json(doc: dict, template: str) -> int:
     changed = 0
 
-    channels = doc.setdefault("channels", {})
-    telegram = channels.setdefault("telegram", {})
-    if telegram.get("responsePrefix") != template:
-        telegram["responsePrefix"] = template
-        changed += 1
-
-    accounts = telegram.get("accounts")
-    if isinstance(accounts, dict):
-        for value in accounts.values():
-            if isinstance(value, dict) and value.get("responsePrefix") != template:
-                value["responsePrefix"] = template
-                changed += 1
+    channels = doc.get("channels", {})
+    if not isinstance(channels, dict):
+        return changed
+    for channel_val in channels.values():
+        if not isinstance(channel_val, dict):
+            continue
+        if channel_val.get("responsePrefix") != template:
+            channel_val["responsePrefix"] = template
+            changed += 1
+        accounts = channel_val.get("accounts", {})
+        if isinstance(accounts, dict):
+            for acc_val in accounts.values():
+                if isinstance(acc_val, dict) and acc_val.get("responsePrefix") != template:
+                    acc_val["responsePrefix"] = template
+                    changed += 1
 
     return changed
 
@@ -678,10 +681,10 @@ def resolve_node_bin() -> str | None:
     return None
 
 
-def validate_js_syntax(path: Path) -> tuple[bool, str]:
-    node = resolve_node_bin()
+def validate_js_syntax(path: Path, node: str | None = None) -> tuple[bool, str]:
+    node = node or resolve_node_bin()
     if not node:
-        return False, "node executable not found for syntax validation"
+        return True, "node executable not found; skipping syntax validation"
     proc = subprocess.run([node, "--check", str(path)], capture_output=True, text=True)
     if proc.returncode == 0:
         return True, ""
@@ -1003,6 +1006,10 @@ def main() -> int:
     }
     dry_run_lines: list[str] = []
 
+    node_bin = resolve_node_bin()
+    if not no_write and not node_bin:
+        print("postfix-patch: WARNING: node not found; applying patch without JS syntax validation")
+
     for path in bundle_files:
         js = path.read_text(encoding="utf-8")
         js2, st1 = patch_postfix_support(js)
@@ -1025,7 +1032,7 @@ def main() -> int:
         if js4 != js:
             original = js
             path.write_text(js4, encoding="utf-8")
-            ok, detail = validate_js_syntax(path)
+            ok, detail = validate_js_syntax(path, node=node_bin)
             if not ok:
                 summary["syntax_fail"] += 1
                 path.write_text(original, encoding="utf-8")

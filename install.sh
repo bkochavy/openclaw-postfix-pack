@@ -48,6 +48,13 @@ die() {
   exit 1
 }
 
+require_cmd() {
+  local cmd="$1"
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    die "required command not found: $cmd"
+  fi
+}
+
 os_name() {
   uname -s
 }
@@ -224,16 +231,25 @@ from pathlib import Path
 path = Path(sys.argv[1])
 doc = json.loads(path.read_text(encoding="utf-8"))
 errors = []
-val = doc.get("channels", {}).get("telegram", {}).get("responsePrefix")
-if not isinstance(val, str) or not val.startswith("postfix:"):
-    errors.append("channels.telegram.responsePrefix missing postfix")
-accounts = doc.get("channels", {}).get("telegram", {}).get("accounts", {})
-if isinstance(accounts, dict):
-    for name, cfg in accounts.items():
-        if isinstance(cfg, dict):
-            rp = cfg.get("responsePrefix")
-            if not isinstance(rp, str) or not rp.startswith("postfix:"):
-                errors.append(f"channels.telegram.accounts.{name}.responsePrefix missing postfix")
+any_channel_ok = False
+channels = doc.get("channels", {})
+for ch_val in channels.values():
+    if not isinstance(ch_val, dict):
+        continue
+    if isinstance(ch_val.get("responsePrefix"), str) and ch_val["responsePrefix"].startswith("postfix:"):
+        any_channel_ok = True
+        break
+    accounts = ch_val.get("accounts", {})
+    if isinstance(accounts, dict):
+        for acc in accounts.values():
+            if isinstance(acc, dict) and isinstance(acc.get("responsePrefix"), str) and acc["responsePrefix"].startswith("postfix:"):
+                any_channel_ok = True
+                break
+    if any_channel_ok:
+        break
+
+if not any_channel_ok:
+    errors.append("no channel has responsePrefix in postfix mode")
 if errors:
     print("\n".join(errors))
     raise SystemExit(1)
@@ -274,6 +290,9 @@ PY
 }
 
 fetch_pack_if_needed
+
+require_cmd bash
+require_cmd python3
 
 if [[ "$CHECK_ONLY" -eq 1 ]]; then
   patcher_for_check="${OPENCLAW_HOME}/bin/patch.py"

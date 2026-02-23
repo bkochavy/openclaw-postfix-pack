@@ -1,14 +1,10 @@
 # openclaw-postfix-pack
 
+> Stamps every OpenClaw message with the actual model that sent it. `/status` lies. This doesn't.
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![OpenClaw](https://img.shields.io/badge/OpenClaw-compatible-orange)](https://openclaw.ai)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](tests/)
-
-> **Stamps every OpenClaw message with the actual model that sent it.**
-> 
-> `/status` lies. This doesn't.
-
-> **Every OpenClaw reply ends with a stamp showing exactly which model sent it.**
 
 ```
 Your question answered here...
@@ -49,6 +45,17 @@ OpenClaw updates via a self-heal that runs every 10 minutes.
 ```bash
 curl -fsSL https://raw.githubusercontent.com/bkochavy/openclaw-postfix-pack/main/install.sh | bash
 ```
+
+## Requirements
+
+| Tool | Required for | Install |
+|------|-------------|---------|
+| `bash` | installer + runtime wrappers | pre-installed |
+| `curl` | one-line install | `apt install curl` |
+| `python3` | setup wizard + patcher | `apt install python3` |
+| `node` 22+ (recommended) | JS syntax validation (`node --check`) | [nodejs.org](https://nodejs.org) |
+
+If `node` is missing, patching still runs, but syntax validation is skipped with a warning.
 
 If you run via `curl|bash`, `OPENCLAW_POSTFIX_REPO` is auto-set from the URL,
 so no env var is needed. You can also clone the repo and run `bash install.sh`

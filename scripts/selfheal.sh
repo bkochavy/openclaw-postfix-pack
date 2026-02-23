@@ -54,6 +54,14 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   else
     log "selfheal: ProgramArguments already healthy"
   fi
+elif [[ "$(uname -s)" == "Linux" ]] && command -v systemctl >/dev/null 2>&1; then
+  GATEWAY_UNIT="openclaw-gateway.service"
+  if ! systemctl --user is-active "$GATEWAY_UNIT" >/dev/null 2>&1; then
+    log "selfheal: gateway service not active — attempting restart"
+    systemctl --user start "$GATEWAY_UNIT" 2>/dev/null || true
+  else
+    log "selfheal: gateway service active"
+  fi
 fi
 
 log "selfheal: done"
