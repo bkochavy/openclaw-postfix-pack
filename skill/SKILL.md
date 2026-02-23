@@ -8,6 +8,8 @@ description: "Full operational runbook for openclaw-postfix-pack. Use when: user
 This pack stamps every OpenClaw reply with the actual model that sent it.
 The stamp appears at the **end** of each message.
 
+Prerequisite: OpenClaw is already installed (`curl -fsSL https://openclaw.ai/install.sh | bash`).
+
 ```
 Your reply text here...
 
@@ -159,11 +161,13 @@ When stamps show full model names (e.g. `gemini-2.5-flash` instead of `g25f`):
 
 This reads all models from `openclaw.json` (primary + fallbacks), checks each against built-in and custom aliases, and auto-derives codes for any that are missing. Writes new entries to `postfix-pack.json` and re-applies.
 
-To see what would be derived without writing:
+To run patch dry-run output while syncing models:
 
 ```bash
 ~/.openclaw/bin/postfix-apply --sync-models --dry-run
 ```
+
+Note: current implementation still writes newly derived aliases when `--sync-models` is used, even if `--dry-run` is also present. Use a config backup first if you need a no-write preview.
 
 ---
 
@@ -263,7 +267,8 @@ PY
 
 Exit codes:
 - `0` — healthy, all bundles patched and config correct
-- `3` — no target bundles found (OpenClaw version changed bundle naming)
+- `2` — `dist/` missing or no target bundle files found
+- `3` — target bundle files exist, but patch hook points were not found
 - `4` — syntax validation failed on a bundle (reverted automatically)
 - `5` — `responsePrefix` not in postfix mode in `openclaw.json`
 
@@ -312,7 +317,7 @@ OPENCLAW_PATCH_FORCE_MODELSTAMP=1 ~/.openclaw/bin/postfix-apply
 To change format, providers, or auth type interactively:
 
 ```bash
-bash ~/.openclaw/workspace/projects/openclaw-postfix-pack/install.sh --setup
+curl -fsSL https://raw.githubusercontent.com/bkochavy/openclaw-postfix-pack/main/install.sh | bash -s -- --setup
 ```
 
 Or if the pack scripts are installed:
@@ -325,15 +330,15 @@ python3 ~/.openclaw/bin/setup-wizard.py
 
 ## Uninstall
 
-From the pack directory:
+From anywhere:
 
 ```bash
-bash uninstall.sh
+curl -fsSL https://raw.githubusercontent.com/bkochavy/openclaw-postfix-pack/main/uninstall.sh | bash
 ```
 
 This removes the self-heal timer, restores the gateway plist, and removes
 installed scripts from `~/.openclaw/bin`. The config at
-`~/.openclaw/postfix-pack.json` is preserved unless you pass `--restore-config`.
+`~/.openclaw/postfix-pack.json` is preserved unless you pass `--remove-config`.
 
 ---
 

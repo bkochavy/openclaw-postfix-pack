@@ -36,6 +36,12 @@ This pack patches the runtime to stamp the **actual** model on every message —
 curl -fsSL https://raw.githubusercontent.com/bkochavy/openclaw-postfix-pack/main/install.sh | bash
 ```
 
+OpenClaw must already be installed and onboarded first. Official install:
+
+```bash
+curl -fsSL https://openclaw.ai/install.sh | bash
+```
+
 The installer walks you through a short setup wizard — pick your stamp format, name your agent, select your providers, and see a live preview before anything is written. The whole thing takes about a minute.
 
 You can also clone the repo and run `bash install.sh` directly.
@@ -44,6 +50,7 @@ You can also clone the repo and run `bash install.sh` directly.
 
 | Tool | Why | Install |
 |------|-----|---------|
+| `openclaw` | required runtime + `~/.openclaw/openclaw.json` | `curl -fsSL https://openclaw.ai/install.sh \| bash` |
 | `bash` | installer + runtime | pre-installed |
 | `curl` | one-line install | `apt install curl` |
 | `python3` | setup wizard + patcher | `apt install python3` |
@@ -119,8 +126,10 @@ OpenClaw updates overwrite the patched bundles. A self-heal runs every 10 minute
 ### Uninstall
 
 ```bash
-bash uninstall.sh
+curl -fsSL https://raw.githubusercontent.com/bkochavy/openclaw-postfix-pack/main/uninstall.sh | bash
 ```
+
+If you cloned this repo, `bash uninstall.sh` works too.
 
 ---
 
@@ -137,7 +146,7 @@ starts with `postfix:`, the runtime appends the rendered stamp to the end of
 messages instead of prepending it. This is achieved by patching three dist
 bundle families:
 
-- `reply-*.js` — main Telegram reply path
+- `reply-*.js` — main gateway reply path
 - `pi-embedded-*.js` — embedded Pi runtime
 - `subagent-registry-*.js` — sub-agent reply path
 
@@ -154,9 +163,10 @@ At runtime, the patched JS injects into `createReplyPrefixContext`:
    config map, falls back to truncated alphanumeric slug.
 
 2. `responsePrefixContextProvider()` — called just before the prefix is
-   rendered. Reads auth profiles from disk (`auth-profiles.json`) to determine
-   the auth type letter. For gateway providers (openrouter, vercel-ai-gateway),
-   also extracts the source segment from the model string's first path segment.
+   rendered. Resolves auth mode from the runtime auth profile store (with a
+   fallback to `cfg.auth.profiles` in `openclaw.json`) to determine the auth
+   type letter. For gateway providers (openrouter, vercel-ai-gateway), it also
+   extracts the source segment from the model string's first path segment.
 
 3. The `identityname` token is shortened to the first uppercase character of
    `resolveIdentityName(cfg, agentId)`.
@@ -205,7 +215,8 @@ OPENCLAW_PATCH_FORCE_MODELSTAMP=1 ~/.openclaw/bin/postfix-apply
 **Check install health (no writes):**
 ```bash
 python3 ~/.openclaw/bin/patch.py --check-only
-# exit 0 = healthy, exit 3 = no bundles matched, exit 4 = syntax fail
+# exit 0 = healthy, 2 = dist/bundles missing, 3 = patch hooks not found,
+# exit 4 = syntax fail, exit 5 = responsePrefix not in postfix mode
 ```
 
 **Verbose output for debugging:**
@@ -249,9 +260,10 @@ None of them block the gateway from starting if they fail.
 | Code | Meaning |
 |------|---------|
 | `0` | All bundles patched or already patched |
-| `2` | `dist/` dir not found (OpenClaw not installed?) |
-| `3` | No target bundle files matched — bundle naming may have changed |
+| `2` | `dist/` missing or no target bundle files found |
+| `3` | Target bundle files exist, but patch hook points were not found |
 | `4` | Patch applied but syntax validation failed — file reverted |
+| `5` | `--check-only`: `responsePrefix` not in postfix mode in `openclaw.json` |
 
 ### Telling Your User What to Do
 
