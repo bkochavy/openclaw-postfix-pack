@@ -1,4 +1,6 @@
 # openclaw-postfix-pack
+![openclaw-postfix-pack](https://raw.githubusercontent.com/bkochavy/openclaw-postfix-pack/main/.github/social-preview.png)
+
 
 > Stamps every OpenClaw message with the actual model that sent it. `/status` lies. This doesn't.
 
