@@ -1,5 +1,6 @@
 {
   "response_prefix_template": "postfix:{provider}/{model}@{identityname}",
+  "_note_auth_order": "Auth fallback detection reads openclaw.json cfg.auth.order[provider] first; put your preferred profile first there.",
   "model_aliases": {
     "claude-opus-4-6": "o46",
     "claude-sonnet-4-6": "s46-1m",

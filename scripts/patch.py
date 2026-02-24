@@ -746,6 +746,7 @@ def has_safe_provider_auth_logic(js: str) -> bool:
     return (
         "typeof resolveAgentDir === \"function\" && typeof ensureAuthProfileStore === \"function\"" in js
         and "const __profiles = cfg?.auth?.profiles;" in js
+        and "const __authOrder = cfg?.auth?.order?.[__rawProvider];" in js
     )
 
 
@@ -817,8 +818,10 @@ def patch_modelstamp_v3(js: str, cfg: dict, force: bool) -> tuple[str, str]:
         "\t\t\t}\n"
         "\t\t\tif (__auth === \"?\") {\n"
         "\t\t\t\tconst __profiles = cfg?.auth?.profiles;\n"
+        "\t\t\t\tconst __authOrder = cfg?.auth?.order?.[__rawProvider];\n"
+        "\t\t\t\tconst __orderedId = Array.isArray(__authOrder) && __authOrder.length > 0 ? __authOrder[0] : null;\n"
         "\t\t\t\tconst __defaultId = `${__rawProvider}:default`;\n"
-        "\t\t\t\tconst __entry = __profiles?.[__defaultId] ?? Object.values(__profiles ?? {}).find((p) => p?.provider === __rawProvider);\n"
+        "\t\t\t\tconst __entry = (__orderedId ? __profiles?.[__orderedId] : null) ?? __profiles?.[__defaultId] ?? Object.values(__profiles ?? {}).find((p) => p?.provider === __rawProvider);\n"
         "\t\t\t\tconst __mode = __entry?.mode;\n"
         "\t\t\t\tconst __override = __AUTH_OVERRIDES?.[__rawProvider]?.[__mode];\n"
         "\t\t\t\tif (__override) __auth = __override;\n"

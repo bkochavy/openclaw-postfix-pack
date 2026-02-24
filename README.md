@@ -164,9 +164,11 @@ At runtime, the patched JS injects into `createReplyPrefixContext`:
 
 2. `responsePrefixContextProvider()` — called just before the prefix is
    rendered. Resolves auth mode from the runtime auth profile store (with a
-   fallback to `cfg.auth.profiles` in `openclaw.json`) to determine the auth
-   type letter. For gateway providers (openrouter, vercel-ai-gateway), it also
-   extracts the source segment from the model string's first path segment.
+   fallback to `cfg.auth` in `openclaw.json`) to determine the auth type
+   letter. In fallback mode it checks `cfg.auth.order[provider]` first, then
+   `${provider}:default`, then the first matching provider profile. For gateway
+   providers (openrouter, vercel-ai-gateway), it also extracts the source
+   segment from the model string's first path segment.
 
 3. The `identityname` token is shortened to the first uppercase character of
    `resolveIdentityName(cfg, agentId)`.

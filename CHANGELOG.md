@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.1.1 — 2026-02-24
+- Fix auth-letter fallback detection to respect `cfg.auth.order[provider]` before `${provider}:default` when runtime auth store lookup is unavailable
+
 ## v1.1.0 — 2026-02-22
 - `--sync-models`: auto-derives aliases for new models on every gateway restart
 - `--dry-run` flag: preview what would be patched without writing
