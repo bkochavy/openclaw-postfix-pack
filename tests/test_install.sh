@@ -115,6 +115,25 @@ if [[ "${MODELSTAMP_COUNT}" -lt 1 ]]; then
   record_fail "no reply-prefix bundle contains __MODELSTAMP_V3__"
 fi
 
+set +e
+REPATCH_OUTPUT="$(python3 "${ROOT_DIR}/scripts/patch.py" --config "${ROOT_DIR}/postfix-pack.example.json" --openclaw-json "${OPENCLAW_JSON}" --openclaw-pkg-dir "${PKG_DIR}" --force-modelstamp 2>&1)"
+REPATCH_RC=$?
+set -e
+
+printf '%s\n' "${REPATCH_OUTPUT}"
+
+if [[ "${REPATCH_RC}" -ne 0 ]]; then
+  record_fail "force modelstamp repatch exited ${REPATCH_RC}"
+fi
+
+if printf '%s' "${REPATCH_OUTPUT}" | rg -q "syntax check failed"; then
+  record_fail "force modelstamp repatch reported syntax failures"
+fi
+
+if ! rg -q '"token":"T"' "${DIST_DIR}"/reply-prefix-*.js 2>/dev/null; then
+  record_fail "repatched bundles did not embed token auth letter T"
+fi
+
 if [[ "${FAIL}" -eq 0 ]]; then
   echo "PASS: sandbox install patch test succeeded"
   exit 0

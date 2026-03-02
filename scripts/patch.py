@@ -137,7 +137,7 @@ DEFAULT_CONFIG = {
         "model_length": 12,
     },
     "auth_mode_overrides": {
-        "anthropic": {"token": "O"},
+        "anthropic": {"token": "T"},
         "vercel-ai-gateway": {"api_key": "T"},
     },
 }
@@ -769,7 +769,13 @@ def patch_modelstamp_v3(js: str, cfg: dict, force: bool) -> tuple[str, str]:
     source_len = int(fb.get("source_length", 2))
     model_len = int(fb.get("model_length", 12))
 
-    on_model_re = re.compile(r"[ \t]*const onModelSelected = \(ctx\) => \{.*?\n[ \t]*\};", re.DOTALL)
+    on_model_re = re.compile(
+        r"(?:[ \t]*let __rawProvider, __rawModel;\n)?"
+        r"(?:[ \t]*const __MODEL_ALIAS_MAP = \{.*?\};\n)?"
+        r"(?:[ \t]*const __MODEL_FALLBACK_LEN = \d+;\n)?"
+        r"[ \t]*const onModelSelected = \(ctx\) => \{.*?\n[ \t]*\};",
+        re.DOTALL,
+    )
     on_model_new = (
         "\tlet __rawProvider, __rawModel;\n"
         f"\tconst __MODEL_ALIAS_MAP = {model_alias_map};\n"
@@ -813,7 +819,7 @@ def patch_modelstamp_v3(js: str, cfg: dict, force: bool) -> tuple[str, str]:
         "\t\t\t\t\tif (__override) __auth = __override;\n"
         "\t\t\t\t\telse if (__ptype === \"oauth\") __auth = \"O\";\n"
         "\t\t\t\t\telse if (__ptype === \"api_key\") __auth = (__rawProvider === \"vercel-ai-gateway\" ? \"T\" : \"K\");\n"
-        "\t\t\t\t\telse if (__ptype === \"token\") __auth = (__rawProvider === \"anthropic\" ? \"O\" : \"T\");\n"
+        "\t\t\t\t\telse if (__ptype === \"token\") __auth = \"T\";\n"
         "\t\t\t\t}\n"
         "\t\t\t}\n"
         "\t\t\tif (__auth === \"?\") {\n"
@@ -827,7 +833,7 @@ def patch_modelstamp_v3(js: str, cfg: dict, force: bool) -> tuple[str, str]:
         "\t\t\t\tif (__override) __auth = __override;\n"
         "\t\t\t\telse if (__mode === \"oauth\") __auth = \"O\";\n"
         "\t\t\t\telse if (__mode === \"api_key\") __auth = (__rawProvider === \"vercel-ai-gateway\" ? \"T\" : \"K\");\n"
-        "\t\t\t\telse if (__mode === \"token\") __auth = (__rawProvider === \"anthropic\" ? \"O\" : \"T\");\n"
+        "\t\t\t\telse if (__mode === \"token\") __auth = \"T\";\n"
         "\t\t\t}\n"
         "\t\t} catch {}\n"
         "\t\tlet __src = null;\n"

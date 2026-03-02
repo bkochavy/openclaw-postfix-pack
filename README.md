@@ -106,7 +106,7 @@ Edit `~/.openclaw/postfix-pack.json`:
     "openai": "oa"
   },
   "auth_mode_overrides": {
-    "anthropic": { "token": "O" }
+    "anthropic": { "token": "T" }
   }
 }
 ```

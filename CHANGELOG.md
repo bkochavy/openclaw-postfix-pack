@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.1.2 — 2026-03-02
+- Change Anthropic token auth letter from `O` to `T` so model stamps clearly distinguish token (`anT/...`) from API key (`anK/...`)
+
 ## v1.1.1 — 2026-02-24
 - Fix auth-letter fallback detection to respect `cfg.auth.order[provider]` before `${provider}:default` when runtime auth store lookup is unavailable
 

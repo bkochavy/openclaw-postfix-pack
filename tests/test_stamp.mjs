@@ -1,5 +1,11 @@
-import { readFileSync } from 'fs';
-const DIST = '/opt/homebrew/lib/node_modules/openclaw/dist';
+import { readFileSync, readdirSync } from 'fs';
+const DIST = process.env.OPENCLAW_DIST || '/opt/homebrew/lib/node_modules/openclaw/dist';
+
+function readBundle(prefix) {
+  const entry = readdirSync(DIST).filter(name => name.startsWith(prefix) && name.endsWith('.js')).sort()[0];
+  if (!entry) throw new Error(`Missing bundle ${prefix}*.js in ${DIST}`);
+  return readFileSync(`${DIST}/${entry}`, 'utf8');
+}
 const HB = "__heartbeat__";
 
 // ── T1: postfix routing ───────────────────────────────────────────────────────
@@ -28,10 +34,10 @@ let p1=0; for (const [d,text,pfx,chk] of t1) { const ok=chk(applyPrefix(text,pfx
 
 // ── T2: live bundle markers ───────────────────────────────────────────────────
 console.log("\nT2: live bundle markers");
-const reply  = readFileSync(`${DIST}/reply-B4B0jUCM.js`,          'utf8');
-const pfx0   = readFileSync(`${DIST}/reply-prefix-C04eF9J1.js`,   'utf8');
-const pi     = readFileSync(`${DIST}/pi-embedded-CHb5giY2.js`,    'utf8');
-const sub    = readFileSync(`${DIST}/subagent-registry-DOZpiiys.js`,'utf8');
+const reply  = readBundle('reply-');
+const pfx0   = readBundle('reply-prefix-');
+const pi     = readBundle('pi-embedded-');
+const sub    = readBundle('subagent-registry-');
 
 const t2 = [
   ["reply has __POSTFIX_PATCHED__",       reply.includes('__POSTFIX_PATCHED__')],
@@ -58,7 +64,7 @@ function mkstamp(prov, rawModel, authType, identity) {
   const short = extractShort(rawModel);
   const mAlias = MA[short] ?? short.replace(/[^a-z0-9]/gi,'').slice(0,12);
   const pBase  = PA[prov] ?? prov.slice(0,2);
-  const auth   = authType==='api_key'?'K': authType==='token'||authType==='oauth'?'O':'?';
+  const auth   = authType==='api_key'?'K': authType==='oauth'?'O':authType==='token'?'T':'?';
   const init   = identity.trim()[0].toUpperCase();
   let provStamp = `${pBase}${auth}`;
   if (prov === 'openrouter' || prov === 'vercel-ai-gateway') {
@@ -69,7 +75,7 @@ function mkstamp(prov, rawModel, authType, identity) {
 }
 const t3 = [
   ["anthropic/sonnet/API key",              "anthropic","claude-sonnet-4-6",          "api_key","Ava","anK/s46-1m@A"],
-  ["anthropic/opus/OAuth(token)",           "anthropic","claude-opus-4-6",            "token",  "Ava","anO/o46@A"],
+  ["anthropic/opus/token",                 "anthropic","claude-opus-4-6",            "token",  "Ava","anT/o46@A"],
   ["openai/gpt-5.2/API key",               "openai",   "gpt-5.2",                    "api_key","Bot","oaK/52@B"],
   ["openrouter/sonnet-via-anthropic",       "openrouter","anthropic/claude-sonnet-4-6","api_key","Z", "orK.an/s46-1m@Z"],
   ["openrouter/gpt-via-openai",             "openrouter","openai/gpt-5.2",            "api_key","X", "orK.oa/52@X"],

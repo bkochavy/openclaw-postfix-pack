@@ -45,7 +45,7 @@
   },
   "auth_mode_overrides": {
     "anthropic": {
-      "token": "O"
+      "token": "T"
     },
     "vercel-ai-gateway": {
       "api_key": "T"
