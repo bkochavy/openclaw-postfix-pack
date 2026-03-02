@@ -793,12 +793,12 @@ def patch_modelstamp_v3(js: str, cfg: dict, force: bool) -> tuple[str, str]:
             return js, "no-match"
 
     rpp_repl = (
-        f"const __PROVIDER_ALIAS_MAP = {provider_alias_map};\n"
-        f"const __SOURCE_ALIAS_MAP = {source_alias_map};\n"
-        f"const __AUTH_OVERRIDES = {auth_override_map};\n"
-        f"const __PROVIDER_FALLBACK_LEN = {provider_len};\n"
-        f"const __SOURCE_FALLBACK_LEN = {source_len};\n"
         "responsePrefixContextProvider: () => {\n"
+        f"\tconst __PROVIDER_ALIAS_MAP = {provider_alias_map};\n"
+        f"\tconst __SOURCE_ALIAS_MAP = {source_alias_map};\n"
+        f"\tconst __AUTH_OVERRIDES = {auth_override_map};\n"
+        f"\tconst __PROVIDER_FALLBACK_LEN = {provider_len};\n"
+        f"\tconst __SOURCE_FALLBACK_LEN = {source_len};\n"
         "\tif (__rawProvider) {\n"
         "\t\tconst __base = (__PROVIDER_ALIAS_MAP[__rawProvider] ?? __rawProvider.slice(0, __PROVIDER_FALLBACK_LEN));\n"
         "\t\tlet __auth = __rawProvider === \"lmstudio\" ? \"L\" : \"?\";\n"
