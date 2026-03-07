@@ -4,7 +4,7 @@ V2 of the model stamp system for OpenClaw.
 
 This version does **not** patch OpenClaw dist files and does **not** rewrite the gateway service. Instead it:
 - uses native `messages.responsePrefix` to emit a structured marker with the real provider and model
-- installs a tiny local plugin that converts that marker into a compact suffix
+- installs a tiny managed plugin that converts that marker into a compact suffix
 - keeps alias maps in one plugin config block inside `openclaw.json`
 
 Example suffixes:
@@ -19,9 +19,10 @@ curl -fsSL https://raw.githubusercontent.com/bkochavy/openclaw-postfix-pack/main
 
 ## What V2 installs
 
-- `~/.openclaw/extensions/message-stamp-suffix/`
+- `message-stamp-suffix` through `openclaw plugins install`
 - `messages.responsePrefix = "[[ocstamp:{provider}:{model}:{identityname}]]"`
-- plugin allowlist + plugin config entry in `~/.openclaw/openclaw.json`
+- install metadata under `plugins.installs.message-stamp-suffix`
+- plugin config entry in `~/.openclaw/openclaw.json`
 
 ## Why V2 is better
 

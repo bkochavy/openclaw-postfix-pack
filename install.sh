@@ -2,12 +2,13 @@
 set -euo pipefail
 OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/.openclaw}"
 CONFIG_PATH="$OPENCLAW_HOME/openclaw.json"
-EXT_DIR="$OPENCLAW_HOME/extensions/message-stamp-suffix"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TMP_REPO=""
 
 cleanup() {
-  [ -n "$TMP_REPO" ] && [ -d "$TMP_REPO" ] && rm -rf "$TMP_REPO"
+  if [ -n "$TMP_REPO" ] && [ -d "$TMP_REPO" ]; then
+    rm -rf "$TMP_REPO"
+  fi
 }
 trap cleanup EXIT
 
@@ -20,12 +21,19 @@ fetch_if_needed() {
   SCRIPT_DIR="$(find "$TMP_REPO" -mindepth 1 -maxdepth 1 -type d | head -1)"
 }
 
-fetch_if_needed
-mkdir -p "$EXT_DIR"
-cp "$SCRIPT_DIR/plugin/index.ts" "$EXT_DIR/index.ts"
-cp "$SCRIPT_DIR/plugin/openclaw.plugin.json" "$EXT_DIR/openclaw.plugin.json"
-cp "$SCRIPT_DIR/plugin/package.json" "$EXT_DIR/package.json"
+command -v openclaw >/dev/null 2>&1 || {
+  echo "openclaw is required" >&2
+  exit 1
+}
+command -v python3 >/dev/null 2>&1 || {
+  echo "python3 is required" >&2
+  exit 1
+}
 
+mkdir -p "$OPENCLAW_HOME"
+[ -f "$CONFIG_PATH" ] || printf '{}\n' > "$CONFIG_PATH"
+fetch_if_needed
+openclaw plugins install "$SCRIPT_DIR/plugin"
 python3 - "$CONFIG_PATH" <<'PY'
 import json, sys
 from pathlib import Path
@@ -37,45 +45,44 @@ allow = plugins.setdefault('allow', [])
 if 'message-stamp-suffix' not in allow:
     allow.append('message-stamp-suffix')
 entries = plugins.setdefault('entries', {})
-entries['message-stamp-suffix'] = {
-    'enabled': True,
-    'config': {
-        'marker': 'ocstamp',
-        'separator': '\n',
-        'identityMode': 'initial',
-        'providerAliases': {
-            'anthropic': 'anK',
-            'claude-cli': 'anO',
-            'codex-cli': 'opK',
-            'lmstudio': 'lmL',
-            'opencode': 'ocK',
-            'openai-codex': 'opK',
-            'openrouter': 'orK',
-            'vercel-ai-gateway': 'veT',
-            'xai': 'xaK'
-        },
-        'modelAliases': {
-            'claude-haiku-4.5': 'h45',
-            'claude-haiku-4-5': 'h45',
-            'claude-opus-4.6': 'o46',
-            'claude-opus-4-6': 'o46',
-            'claude-sonnet-4.5': 's45',
-            'claude-sonnet-4-5': 's45',
-            'claude-sonnet-4.6': 's46',
-            'claude-sonnet-4-6': 's46',
-            'glm-5': 'g5',
-            'gpt-5.2': 'gpt52',
-            'gpt-5.3-codex': 'gpt53c',
-            'gpt-5.3-codex-spark': 'gpt53s',
-            'gpt-5.4': 'gpt54',
-            'grok-4-1-fast': 'g41f',
-            'haiku-4.6': 'h46',
-            'kimi-k2.5': 'k25',
-            'minimax-m2.5': 'm25',
-            'opus-4.6': 'o46',
-            'qwen3-8b-mlx': 'q38b',
-            'sonnet-4.6': 's46'
-        }
+entry = entries.setdefault('message-stamp-suffix', {'enabled': True})
+entry['enabled'] = True
+entry['config'] = {
+    'marker': 'ocstamp',
+    'separator': '\n',
+    'identityMode': 'initial',
+    'providerAliases': {
+        'anthropic': 'anK',
+        'claude-cli': 'anO',
+        'codex-cli': 'opK',
+        'lmstudio': 'lmL',
+        'opencode': 'ocK',
+        'openai-codex': 'opK',
+        'openrouter': 'orK',
+        'vercel-ai-gateway': 'veT',
+        'xai': 'xaK'
+    },
+    'modelAliases': {
+        'claude-haiku-4.5': 'h45',
+        'claude-haiku-4-5': 'h45',
+        'claude-opus-4.6': 'o46',
+        'claude-opus-4-6': 'o46',
+        'claude-sonnet-4.5': 's45',
+        'claude-sonnet-4-5': 's45',
+        'claude-sonnet-4.6': 's46',
+        'claude-sonnet-4-6': 's46',
+        'glm-5': 'g5',
+        'gpt-5.2': 'gpt52',
+        'gpt-5.3-codex': 'gpt53c',
+        'gpt-5.3-codex-spark': 'gpt53s',
+        'gpt-5.4': 'gpt54',
+        'grok-4-1-fast': 'g41f',
+        'haiku-4.6': 'h46',
+        'kimi-k2.5': 'k25',
+        'minimax-m2.5': 'm25',
+        'opus-4.6': 'o46',
+        'qwen3-8b-mlx': 'q38b',
+        'sonnet-4.6': 's46'
     }
 }
 
@@ -95,7 +102,6 @@ strip_postfix(obj.get('channels', {}))
 p.write_text(json.dumps(obj, indent=2) + '\n')
 PY
 
-# Remove legacy v1 artifacts if present.
 launchctl bootout "gui/$(id -u)/ai.openclaw.gateway-selfheal" >/dev/null 2>&1 || true
 launchctl disable "gui/$(id -u)/ai.openclaw.gateway-selfheal" >/dev/null 2>&1 || true
 rm -f "$HOME/Library/LaunchAgents/ai.openclaw.gateway-selfheal.plist"
