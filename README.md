@@ -1,5 +1,7 @@
 # openclaw-postfix-pack
 
+> **Deprecated:** this repo is no longer used in the maintainer's production OpenClaw setup. It was replaced by a tiny local suffix plugin that consumes native `messages.responsePrefix` metadata and does not patch OpenClaw dist files or rewrite the gateway service. The repo remains as historical reference only.
+
 ![openclaw-postfix-pack](https://raw.githubusercontent.com/bkochavy/openclaw-postfix-pack/main/.github/social-preview.png)
 
 > Know which AI model actually answered you. Every message. Every time.
@@ -13,10 +15,10 @@
 ```
 Your question answered here...
 
-anK/s46-1m@A
+ancli/o46@A
 ```
 
-That last line is the stamp: `anthropic` · `API key` · `sonnet-4-6` · agent `A`.
+That last line is the stamp: `claude-cli` backend · `opus-4.6` · agent `A`.
 
 ---
 
@@ -61,32 +63,33 @@ If `node` is missing, patching still works — syntax validation is just skipped
 ### Reading the Stamp
 
 ```
-anK/s46-1m@A
-└┬┘└┬┘└──┬──┘└┬┘
- │  │    │   └── @Identity: your agent's initial
- │  │    └────── Model alias (s46-1m = claude-sonnet-4-6 via Anthropic 1M context)
- │  └─────────── Auth: K=API key, O=OAuth/token, T=Vercel token
- └────────────── Provider alias (an = anthropic)
+ancli/o46@A
+└─┬─┘└┬┘ └┬┘
+  │    │   └── agent identity initial
+  │    └────── model alias (`o46` = `opus-4.6`)
+  └─────────── provider/backend alias (`ancli` = `claude-cli`)
 ```
 
-For OpenRouter or gateway providers, a source segment is added:
+Another compact example:
 
 ```
-orK.an/o46@A
-└┬┘└┬┘└──┬─┘
- │  │   └── model alias
- │  └─────── .an = routed through Anthropic via OpenRouter
- └─────────── orK = OpenRouter, API key
+opcli/gpt54@A
+└─┬─┘└─┬─┘└┬┘
+  │     │   └── agent identity initial
+  │     └────── model alias (`gpt54` = `gpt-5.4`)
+  └──────────── provider/backend alias (`opcli` = `codex-cli`)
 ```
+
+The pack can mix direct-provider aliases such as `anO`, `opK`, `orK`, and `xaK` with backend-aware aliases such as `ancli` and `opcli`.
 
 ### Format Options
 
 | Style | Example | Config template |
 |-------|---------|-----------------|
-| Compact (default) | `anK/s46-1m@A` | `postfix:{provider}/{model}@{identityname}` |
-| Bracket | `[anK\|s46-1m\|A]` | `postfix:[{provider}\|{model}\|{identityname}]` |
-| Model only | `s46-1m@A` | `postfix:{model}@{identityname}` |
-| Custom | anything | any combination of `{provider}`, `{model}`, `{identityname}` |
+| Compact (default) | `ancli/o46@A` | `postfix:{provideralias}/{alias}@{identityname}` |
+| Bracket | `[ancli\|o46\|A]` | `postfix:[{provideralias}\|{alias}\|{identityname}]` |
+| Model only | `o46@A` | `postfix:{alias}@{identityname}` |
+| Custom | anything | any combination of `{provideralias}`, `{alias}`, `{identityname}` |
 
 ### Customizing Aliases
 
@@ -94,19 +97,19 @@ Edit `~/.openclaw/postfix-pack.json`:
 
 ```json
 {
-  "response_prefix_template": "postfix:{provider}/{model}@{identityname}",
+  "response_prefix_template": "postfix:{provideralias}/{alias}@{identityname}",
   "model_aliases": {
-    "claude-sonnet-4-6": "s46-1m",
-    "claude-opus-4-6": "o46",
-    "gpt-5.2": "52"
+    "opus-4.6": "o46",
+    "sonnet-4.6": "s46",
+    "gpt-5.4": "gpt54",
+    "gpt-5.3-codex": "gpt53c"
   },
   "provider_aliases": {
-    "anthropic": "an",
-    "openrouter": "or",
-    "openai": "oa"
-  },
-  "auth_mode_overrides": {
-    "anthropic": { "token": "T" }
+    "claude-cli": "ancli",
+    "codex-cli": "opcli",
+    "anthropic": "anO",
+    "openrouter": "orK",
+    "openai-codex": "opK"
   }
 }
 ```
@@ -114,6 +117,8 @@ Edit `~/.openclaw/postfix-pack.json`:
 After editing, re-apply: `~/.openclaw/bin/postfix-apply`
 
 The full config schema is in [`postfix-pack.example.json`](postfix-pack.example.json).
+
+CLI backend stamp notes: [`CLI_BACKEND_MODELSTAMP_FIX.md`](CLI_BACKEND_MODELSTAMP_FIX.md).
 
 ### After an OpenClaw Update
 
@@ -194,9 +199,9 @@ Key fields:
 
 | Field | Type | Purpose |
 |-------|------|---------|
-| `response_prefix_template` | string | Must start with `postfix:`. Tokens: `{provider}`, `{model}`, `{identityname}` |
+| `response_prefix_template` | string | Must start with `postfix:`. Tokens: `{provideralias}`, `{alias}`, `{identityname}` |
 | `model_aliases` | object | Exact model name → short alias |
-| `provider_aliases` | object | Provider id → 2-char alias |
+| `provider_aliases` | object | Provider/backend id → compact stamp prefix |
 | `source_aliases` | object | Gateway source segment → 2-char alias |
 | `auth_mode_overrides` | object | `provider → mode → letter` override |
 | `fallback.provider_length` | int | Chars to use when no alias matches |

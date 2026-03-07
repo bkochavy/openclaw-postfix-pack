@@ -24,30 +24,43 @@ PREFIX_ALIAS_TEMPLATE_MARKER = "__PREFIX_ALIAS_TEMPLATE_V1__"
 TARGET_PATTERNS = ("reply-*.js", "pi-embedded-*.js", "subagent-registry-*.js")
 
 DEFAULT_CONFIG = {
-    "response_prefix_template": "postfix:{provider}/{model}@{identityname}",
+    "response_prefix_template": "postfix:{provideralias}/{alias}@{identityname}",
     "model_aliases": {
         "claude-opus-4-6": "o46",
-        "claude-sonnet-4-6": "s46-1m",
+        "claude-opus-4.6": "o46",
+        "opus-4.6": "o46",
+        "claude-sonnet-4-6": "s46",
+        "claude-sonnet-4.6": "s46",
+        "sonnet-4.6": "s46",
         "claude-sonnet-4-5": "s45",
         "claude-haiku-4-5": "h45",
-        "gpt-5.3-codex": "53c",
-        "gpt-5.2-codex": "52c",
-        "gpt-5.2": "52",
+        "gpt-5.4": "gpt54",
+        "gpt-5.3-codex": "gpt53c",
+        "gpt-5.3-codex-spark": "gpt53s",
+        "gpt-5.2-codex": "gpt52c",
+        "gpt-5.2": "gpt52",
         "minimax-m2.5": "m25",
         "glm-5": "g5",
         "kimi-k2.5": "k25",
         "grok-4-1-fast": "g41f",
         "grok-4-1-fast-reasoning": "g41fr",
+        "claude-haiku-4-6": "h46",
+        "claude-haiku-4.6": "h46",
+        "haiku-4.6": "h46",
+        "claude-haiku-4-5-20251001": "h45",
+        "claude-sonnet-4-5-20250929": "s45"
     },
     "provider_aliases": {
-        "anthropic": "an",
-        "openrouter": "or",
-        "openai-codex": "oc",
-        "openai": "oa",
-        "vercel-ai-gateway": "ve",
-        "opencode": "op",
-        "xai": "xa",
-        "lmstudio": "lm",
+        "anthropic": "anO",
+        "claude-cli": "ancli",
+        "openrouter": "orK",
+        "openai-codex": "opK",
+        "codex-cli": "opcli",
+        "openai": "opK",
+        "vercel-ai-gateway": "veT",
+        "opencode": "ocK",
+        "xai": "xaK",
+        "lmstudio": "lmL"
     },
     "source_aliases": {
         "openai": "oa",
@@ -60,7 +73,7 @@ DEFAULT_CONFIG = {
         "moonshotai": "mo",
         "z-ai": "za",
         "zai": "za",
-        "xai": "xa",
+        "xai": "xa"
     },
     "fallback": {
         "provider_length": 2,
@@ -68,12 +81,14 @@ DEFAULT_CONFIG = {
         "model_length": 12,
     },
     "auth_mode_overrides": {
-        "anthropic": {"token": "O"},
+        "anthropic": {"token": "O", "oauth": "O", "api_key": "K"},
+        "claude-cli": {"token": "O", "oauth": "O", "api_key": "O"},
+        "openai": {"token": "K", "oauth": "K", "api_key": "K"},
+        "openai-codex": {"token": "K", "oauth": "K", "api_key": "K"},
+        "codex-cli": {"token": "K", "oauth": "K", "api_key": "K"},
         "vercel-ai-gateway": {"api_key": "T"},
     },
 }
-
-
 def deep_merge(base: dict, incoming: dict) -> dict:
     out = dict(base)
     for key, value in incoming.items():

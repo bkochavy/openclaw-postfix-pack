@@ -41,18 +41,38 @@ if [[ "$(uname -s)" == "Darwin" ]]; then
   fi
 
   current_prog="$($PLISTBUDDY -c "Print :ProgramArguments:0" "$PLIST" 2>/dev/null || true)"
+  gateway_domain="gui/$(id -u)"
+  gateway_target="${gateway_domain}/${LABEL}"
+  needs_reload=0
+
   if [[ "$current_prog" != "$WRAPPER" ]]; then
     log "selfheal: correcting ProgramArguments to wrapper"
     "$PLISTBUDDY" -c "Delete :ProgramArguments" "$PLIST" >/dev/null 2>&1 || true
     "$PLISTBUDDY" -c "Add :ProgramArguments array" "$PLIST"
     "$PLISTBUDDY" -c "Add :ProgramArguments:0 string $WRAPPER" "$PLIST"
-
-    launchctl bootout "gui/$(id -u)/${LABEL}" >/dev/null 2>&1 || true
-    launchctl bootstrap "gui/$(id -u)" "$PLIST" >/dev/null 2>&1 || true
-    launchctl kickstart -k "gui/$(id -u)/${LABEL}" >/dev/null 2>&1 || true
-    log "selfheal: gateway launch agent reloaded"
+    needs_reload=1
   else
     log "selfheal: ProgramArguments already healthy"
+  fi
+
+  if ! launchctl print "$gateway_target" >/dev/null 2>&1; then
+    log "selfheal: gateway launch agent missing from launchd; bootstrapping"
+    needs_reload=1
+  fi
+
+  if [[ "$needs_reload" -eq 1 ]]; then
+    bootout_err="$(launchctl bootout "$gateway_target" 2>&1 || true)"
+    bootstrap_err="$(launchctl bootstrap "$gateway_domain" "$PLIST" 2>&1 || true)"
+    kickstart_err="$(launchctl kickstart -k "$gateway_target" 2>&1 || true)"
+
+    if launchctl print "$gateway_target" >/dev/null 2>&1; then
+      log "selfheal: gateway launch agent reloaded"
+    else
+      log "selfheal: gateway launch agent reload failed"
+      [[ -n "$bootout_err" ]] && log "selfheal: bootout: $bootout_err"
+      [[ -n "$bootstrap_err" ]] && log "selfheal: bootstrap: $bootstrap_err"
+      [[ -n "$kickstart_err" ]] && log "selfheal: kickstart: $kickstart_err"
+    fi
   fi
 elif [[ "$(uname -s)" == "Linux" ]] && command -v systemctl >/dev/null 2>&1; then
   GATEWAY_UNIT="openclaw-gateway.service"
