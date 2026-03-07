@@ -2,7 +2,11 @@
 set -euo pipefail
 OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/.openclaw}"
 CONFIG_PATH="$OPENCLAW_HOME/openclaw.json"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_PATH="${BASH_SOURCE[0]-}"
+SCRIPT_DIR=""
+if [ -n "$SCRIPT_PATH" ] && [ -e "$SCRIPT_PATH" ]; then
+  SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+fi
 TMP_REPO=""
 
 cleanup() {
